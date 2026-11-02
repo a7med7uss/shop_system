@@ -13,7 +13,8 @@
     "build:renderer": "vite build",
     "build:electron": "esbuild src/main/index.ts --bundle --platform=node --format=cjs --target=node24 --external:electron --external:better-sqlite3 --outfile=dist-electron/main.cjs && esbuild src/preload/index.ts --bundle --platform=node --format=cjs --target=node24 --external:electron --outfile=dist-electron/preload.cjs",
     "typecheck": "tsc --noEmit",
-    "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never"
+    "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "test:database": "node -e \"require('fs').mkdirSync('.ci',{recursive:true})\" && esbuild scripts/database-smoke.ts --bundle --platform=node --format=cjs --target=node24 --external:better-sqlite3 --outfile=.ci/database-smoke.cjs && node .ci/database-smoke.cjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",
