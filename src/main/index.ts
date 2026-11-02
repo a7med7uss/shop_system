@@ -157,7 +157,10 @@ function register(){
     login();const value=String(code||'').trim();if(!value)return null;
     const serial=db.prepare("SELECT product_id FROM product_serials WHERE serial_number=? AND status='available'").get(value) as any;
     const row=serial?db.prepare('SELECT * FROM products WHERE id=? AND active=1').get(serial.product_id):db.prepare('SELECT * FROM products WHERE barcode=? AND active=1').get(value);
-    return row?productDto(row):null;
+    if(!row)return null;
+    const result=productDto(row);
+    if(serial)result.scannedSerial=value;
+    return result;
   });
   ipcMain.handle('products:create',(_e,v:ProductInput)=>{const u=admin();return productDto(db.prepare('SELECT * FROM products WHERE id=?').get(addProduct(v,u.id)));});
   ipcMain.handle('products:update',(_e,id:number,v:ProductInput)=>{
