@@ -1,10 +1,10 @@
-import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import { openDatabase, getSettings, hashPassword, verifyPassword } from '../src/main/database';
 
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'storeflow-db-smoke-'));
-const file = path.join(root, 'storeflow-smoke.sqlite');
+const root = path.resolve('.ci');
+fs.mkdirSync(root, { recursive: true });
+const file = path.join(root, 'storeflow-smoke-' + process.pid + '.sqlite');
 let db: ReturnType<typeof openDatabase> | null = null;
 
 try {
@@ -42,5 +42,7 @@ try {
   console.log('StoreFlow database smoke test passed.');
 } finally {
   if (db?.open) db.close();
-  fs.rmSync(root, { recursive: true, force: true });
+  for (const suffix of ['', '-wal', '-shm']) {
+    try { fs.unlinkSync(file + suffix); } catch { /* GitHub Actions discards the CI workspace. */ }
+  }
 }
