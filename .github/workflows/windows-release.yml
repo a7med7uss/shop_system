@@ -17,6 +17,8 @@ jobs:
         run: npm install
       - name: Build
         run: npm run build
+      - name: Database initialization smoke test
+        run: npm run test:database
       - name: Package installer
         run: npx electron-builder --win nsis --x64 --publish never
       - name: Create checksum
