@@ -33,7 +33,19 @@ export default function App(){
  const total=quote.total;
  useEffect(()=>{if(!user||cart.length===0){setQuote({subtotal:0,discountTotal:0,total:0});return;}let cancelled=false;window.storeflow.quoteSale({items:cart.map(x=>({productId:x.product.id,quantity:x.qty,discountLevel:x.level,serialNumbers:x.serialNumbers})),invoiceDiscountLevel:invoiceLevel}).then(value=>{if(!cancelled)setQuote(value);}).catch(error=>{if(!cancelled)notify(error.message||String(error),true);});return()=>{cancelled=true;};},[user,cart,invoiceLevel,settings.discountEnabled,settings.highDiscountPercent,settings.monsterDiscountPercent]);
  const onLogin=async(e:React.FormEvent)=>{e.preventDefault();const f=new FormData(e.currentTarget as HTMLFormElement);try{const result=hasAdmin?await window.storeflow.login({username:String(f.get('username')),password:String(f.get('password'))}):await window.storeflow.setupAdmin({username:String(f.get('username')),displayName:String(f.get('display')),password:String(f.get('password'))});setUser(result);setPage(result.role==='admin'?'dashboard':'pos');}catch(err:any){notify(err.message,true);}};
- const add=(p:Product)=>{setCart(old=>{const found=old.find(x=>x.product.id===p.id);if(found){if(found.qty>=p.stockQuantity){notify('الكمية غير متاحة.',true);return old;}return old.map(x=>x.product.id===p.id?{...x,qty:x.qty+1,serialNumbers:p.scannedSerial?[...x.serialNumbers,p.scannedSerial]:x.serialNumbers}:x);}return [...old,{product:p,qty:1,level:null,serialNumbers:p.scannedSerial?[p.scannedSerial]:[]}];});setPage('pos');};
+ const add=(p:Product)=>{
+  if(p.serialTracking&&!p.scannedSerial){notify('هذا المنتج يتطلب مسح Serial Number لكل قطعة.',true);return;}
+  setCart(old=>{
+   const found=old.find(x=>x.product.id===p.id);
+   if(p.serialTracking&&p.scannedSerial&&old.some(x=>x.product.id===p.id&&x.serialNumbers.includes(p.scannedSerial!))){notify('هذا الرقم التسلسلي تمت إضافته بالفعل.',true);return old;}
+   if(found){
+    if(found.qty>=p.stockQuantity){notify('الكمية غير متاحة.',true);return old;}
+    return old.map(x=>x.product.id===p.id?{...x,qty:x.qty+1,serialNumbers:p.scannedSerial?[...x.serialNumbers,p.scannedSerial]:x.serialNumbers}:x);
+   }
+   return [...old,{product:p,qty:1,level:null,serialNumbers:p.scannedSerial?[p.scannedSerial]:[]}];
+  });
+  setPage('pos');
+ };
  const scanCode=async(v:string)=>{const p=await window.storeflow.scanProduct(v);if(p)add(p);else notify('لم يتم العثور على المنتج.',true);setScan('');};
  const changeQty=(id:number,qty:number)=>{if(qty<=0){setCart(cart.filter(x=>x.product.id!==id));return;}const p=cart.find(x=>x.product.id===id)?.product;if(p&&qty>p.stockQuantity){notify('الكمية أكبر من المخزون.',true);return;}setCart(cart.map(x=>x.product.id===id?{...x,qty,serialNumbers:x.serialNumbers.slice(0,qty)}:x));};
  const openProduct=(p?:Product)=>{if(p){setEditing(p.id);setForm({name:p.name,brand:p.brand,model:p.model,category:p.category,genericCategory:p.genericCategory,barcode:p.barcode,purchasePrice:p.purchasePrice||0,sellingPrice:p.sellingPrice,stockQuantity:p.stockQuantity,allowDiscount:p.allowDiscount,serialTracking:p.serialTracking,lowStockThreshold:p.lowStockThreshold,tags:p.tags,serials:[]});setTagsText(p.tags.join(', '));}else{setEditing(null);setForm(initial);setTagsText('');}setSerialText('');setShowProduct(true);};
