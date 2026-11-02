@@ -113,45 +113,6 @@ function register(){
   ipcMain.handle('backup:run',async()=>{admin();return backup();});
   ipcMain.handle('backup:restore',async()=>{
     const actor=admin();
-    const selected=await dialog.showOpenDialog(win!,{
-      properties:['openFile'],
-      filters:[{name:'SQLite backups',extensions:['sqlite','sqlite3','db']}]
-    });
-    if(selected.canceled||!selected.filePaths[0])return {success:false,message:'تم إلغاء اختيار النسخة.'};
-    const source=selected.filePaths[0];
-    let candidate:Database.Database|null=null;
-    try{
-      candidate=new Database(source,{readonly:true,fileMustExist:true});
-      const integrity=candidate.pragma('quick_check') as any[];
-      const hasProducts=!!candidate.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='products'").get();
-      if(!integrity.length||String(integrity[0].quick_check).toLowerCase()!=='ok'||!hasProducts){
-        throw new Error('ملف النسخة غير صالح أو لا يحتوي قاعدة StoreFlow.');
-      }
-    }finally{
-      if(candidate?.open)candidate.close();
-    }
-    const safetyPath=path.join(path.dirname(databasePath),'StoreFlow_PreRestore_'+now().replace(/[:.]/g,'-')+'.sqlite');
-    await db.backup(safetyPath);
-    db.close();
-    try{
-      for(const suffix of ['-wal','-shm']){try{fs.unlinkSync(databasePath+suffix);}catch{}}
-      fs.copyFileSync(source,databasePath);
-      db=openDatabase(databasePath);
-      session=null;
-      audit(db,actor.id,'backup.restored',{file:path.basename(source)});
-      if(win&&!win.isDestroyed())win.webContents.reload();
-      return {success:true,message:'تمت استعادة النسخة بنجاح. تم الاحتفاظ بنسخة أمان قبل الاستعادة.'};
-    }catch(error){
-      try{if(db?.open)db.close();}catch{}
-      for(const suffix of ['-wal','-shm']){try{fs.unlinkSync(databasePath+suffix);}catch{}}
-      fs.copyFileSync(safetyPath,databasePath);
-      db=openDatabase(databasePath);
-      throw error;
-    }
-  });
-
-  ipcMain.handle('backup:restore',async()=>{
-    const actor=admin();
     const picked=await dialog.showOpenDialog(win!,{
       properties:['openFile'],
       filters:[{name:'StoreFlow SQLite backup',extensions:['sqlite','sqlite3','db']}]
