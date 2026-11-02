@@ -8,7 +8,6 @@ import {openDatabase,hashPassword,verifyPassword,getSettings,saveSettings,audit}
 
 let db:Database.Database;
 let databasePath='';
-let databasePath='';
 let win:BrowserWindow|null=null;
 let session:any=null;
 let backupTimer:NodeJS.Timeout|null=null;

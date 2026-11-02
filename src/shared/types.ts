@@ -26,6 +26,7 @@ export interface Product {
   serialTracking: boolean;
   lowStockThreshold: number;
   tags: string[];
+  scannedSerial?: string;
 }
 
 export interface ProductInput {
