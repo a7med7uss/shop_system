@@ -20,3 +20,5 @@ jobs:
         run: npm run typecheck
       - name: Build bundles
         run: npm run build
+      - name: Database initialization smoke test
+        run: npm run test:database
