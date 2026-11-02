@@ -1,0 +1,30 @@
+import {contextBridge,ipcRenderer} from 'electron';
+import type {StoreFlowAPI} from '../shared/types';
+
+const api:StoreFlowAPI = {
+  bootstrap:()=>ipcRenderer.invoke('app:bootstrap'),
+  setupAdmin:(v)=>ipcRenderer.invoke('auth:setup',v),
+  login:(v)=>ipcRenderer.invoke('auth:login',v),
+  logout:()=>ipcRenderer.invoke('auth:logout'),
+  getCurrentUser:()=>ipcRenderer.invoke('auth:current'),
+  getSettings:()=>ipcRenderer.invoke('settings:get'),
+  saveSettings:(v)=>ipcRenderer.invoke('settings:save',v),
+  chooseDirectory:()=>ipcRenderer.invoke('dialog:directory'),
+  chooseImage:()=>ipcRenderer.invoke('dialog:image'),
+  runBackup:()=>ipcRenderer.invoke('backup:run'),
+  listProducts:(q)=>ipcRenderer.invoke('products:list',q),
+  scanProduct:(v)=>ipcRenderer.invoke('products:scan',v),
+  createProduct:(v)=>ipcRenderer.invoke('products:create',v),
+  updateProduct:(id,v)=>ipcRenderer.invoke('products:update',id,v),
+  adjustStock:(v)=>ipcRenderer.invoke('stock:adjust',v),
+  dashboard:(from,to)=>ipcRenderer.invoke('dashboard:get',from,to),
+  createSale:(v)=>ipcRenderer.invoke('sales:create',v),
+  listSales:()=>ipcRenderer.invoke('sales:list'),
+  getMovements:()=>ipcRenderer.invoke('stock:movements'),
+  createExpense:(v)=>ipcRenderer.invoke('expense:create',v),
+  listUsers:()=>ipcRenderer.invoke('users:list'),
+  createUser:(v)=>ipcRenderer.invoke('users:create',v),
+  setUserActive:(id,active)=>ipcRenderer.invoke('users:active',id,active),
+  printInvoice:(html,size)=>ipcRenderer.invoke('print:invoice',html,size)
+};
+contextBridge.exposeInMainWorld('storeflow',api);
