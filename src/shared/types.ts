@@ -87,6 +87,23 @@ export interface Sale {
   createdAt: string;
 }
 
+
+export interface SaleLine {
+  id: number;
+  productId: number;
+  productName: string;
+  quantity: number;
+  returnedQuantity: number;
+  unitPrice: number;
+  discountAmount: number;
+  discountLevel: DiscountLevel;
+  serialNumbers: string[];
+}
+
+export interface SaleDetails extends Sale {
+  items: SaleLine[];
+}
+
 export interface Movement {
   id: number;
   productName: string;
@@ -122,13 +139,18 @@ export interface StoreFlowAPI {
   chooseDirectory: () => Promise<string|null>;
   chooseImage: () => Promise<string|null>;
   runBackup: () => Promise<any>;
+  restoreBackup: () => Promise<{success:boolean;message:string}>;
   listProducts: (query?:string) => Promise<Product[]>;
   scanProduct: (code:string) => Promise<Product|null>;
   createProduct: (input:ProductInput) => Promise<Product>;
   updateProduct: (id:number,input:ProductInput) => Promise<Product>;
   adjustStock: (input:{productId:number;delta:number;unitCost?:number;reason:string;serials?:string[]}) => Promise<void>;
   dashboard: (from:string,to:string) => Promise<Dashboard>;
+  quoteSale: (input:{items:CartLine[];invoiceDiscountLevel:DiscountLevel}) => Promise<{subtotal:number;discountTotal:number;total:number}>;
   createSale: (input:{items:CartLine[];invoiceDiscountLevel:DiscountLevel;paymentMethod:string;customerName?:string}) => Promise<Sale>;
+  getSale: (id:string) => Promise<SaleDetails>;
+  returnSaleItem: (input:{saleItemId:number;quantity:number;reason:string;serialNumbers?:string[]}) => Promise<void>;
+  voidSale: (saleId:string,reason:string) => Promise<void>;
   listSales: () => Promise<Sale[]>;
   getMovements: () => Promise<Movement[]>;
   createExpense: (input:{title:string;amount:number}) => Promise<void>;
