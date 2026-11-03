@@ -1,83 +1,105 @@
 # StoreFlow
 
-Local-first inventory and point-of-sale desktop system for Windows.
+Local-first inventory and point-of-sale desktop system for 64-bit Windows.
 
-Current baseline: v0.1.0 development. This branch is the first implementation pass; it has not yet been validated on a physical Windows PC, barcode scanner, or receipt printer.
+## Download and install
+
+1. Open the GitHub Releases page: https://github.com/a7med7uss/shop_system/releases
+2. Download `Install-StoreFlow.bat`.
+3. Right-click the BAT file and choose **Run as administrator** only if Windows asks for it. The installer is per-user and normally does not need administrator rights.
+4. The BAT downloads `StoreFlow-Setup.exe` and its SHA256 checksum, verifies the checksum, and launches the setup wizard.
+5. Keep the default installation folder unless you have a reason to change it. The wizard creates a desktop shortcut and a Start Menu entry.
+6. Launch StoreFlow. On first run, create the administrator account. Then sign in and create seller accounts from the Users area.
+
+The installer bundles the app runtime. You do not need to install Node.js, Git, or SQLite separately.
+
+> The BAT installer will work after the first Windows installer has been published under GitHub Releases. If Releases is empty, use the repository Actions page to check the first build.
+
+## First-run setup
+
+- Create the first administrator username, display name, and password (at least 8 characters).
+- Open Settings and enter the store name, phone, address, logo, currency and preferred language.
+- Configure both discount percentages globally. A product must be marked discount-eligible before a seller can choose one of the two preset tiers for that product.
+- Add products and their stock. For serial-tracked products, provide one distinct serial number per unit.
+- Create individual seller accounts. Sellers can sell but do not receive purchase-cost or profit fields.
 
 ## Features in this baseline
 
-- Electron + React + TypeScript desktop shell.
-- Local SQLite database stored in the Windows user profile.
-- First-run administrator creation, login and Admin/Seller roles.
-- Product catalog with model, categories, barcode/SKU and tags.
-- Purchase cost and profit are returned only to administrator sessions.
-- Two globally configured discount tiers.
-- Discounts are calculated from positive profit margin, not selling price.
-- Seller chooses only the enabled preset tier; no custom percentage entry.
-- Cart-wide preset discount for discount-eligible products.
-- Stock adjustments, movement history and low-stock alerts.
-- Sales records, invoice printing dialog and selected paper size.
-- Store identity, one global currency, Arabic RTL / English, Light / Dark.
-- A4 default, 58mm and 80mm thermal receipt options.
-- Up to three backup directories and scheduled backups while the application is open.
+- Electron + React + TypeScript Windows desktop app.
+- Local SQLite data stored in the Windows user profile; no cloud connection is used for sales or stock.
+- First-run administrator setup, login, admin and seller roles.
+- Product catalog with categories, brand/model, barcode/SKU, tags and optional serial tracking.
+- Admin-only purchase cost and profit fields.
+- Two admin-configured discount rates, calculated from positive product margin (sale price minus purchase cost). Seller selects a preset tier per eligible product line; no custom amount or invoice-wide discount.
+- Barcode/serial scanning through scanners that act as a USB keyboard (HID).
+- Stock adjustments and movement journal, low-stock list and threshold.
+- Sales history, printable invoices, admin-only item returns and voids.
+- Admin dashboard with sales, discounts, cost of goods, gross profit and expenses.
+- Global store currency; Arabic RTL and English LTR; Light and Dark modes.
+- A4 default invoice, with 58mm and 80mm thermal paper options.
+- Up to three backup destinations; scheduled backup attempts run only while StoreFlow is open.
 
-## Discount calculation
+## Keyboard and scanner test
 
-For an eligible product line:
+For a USB barcode/QR scanner configured as a keyboard:
+1. Click the scan field on the POS page.
+2. Scan a product barcode or an available serial number.
+3. Confirm the product is added to the cart.
+4. For a serial-tracked product, scan a different available serial for every unit.
+5. Complete a test sale and verify the stock decreases by the sold quantity.
 
-    discount = max(0, selling price - purchase cost) * quantity * configured rate
+A scanner that sends Enter after each scan is recommended. No special driver is normally needed for USB HID keyboard mode.
 
-The administrator configures both rates once in settings. A cart-wide tier overrides per-line selections for eligible products. Ineligible products receive no discount.
+## Printer test
 
-## Inventory and historical costs
+1. Connect and install the official driver for your printer in Windows.
+2. Open StoreFlow Settings and choose A4, 58mm or 80mm.
+3. Complete a test sale and select the target printer in the Windows print dialog.
+4. Check alignment and paper width. Thermal printer models differ, so physical adjustment may be needed.
 
-The first release does not include supplier accounts or purchase invoices. The administrator adds stock manually. An optional unit cost on stock additions updates the weighted average product cost. Sales store a cost snapshot so later product-cost changes do not rewrite previous sales.
+The app opens the Windows print dialog; it does not silently choose or install a printer driver.
 
-## Backups
+## Backup and restore test
 
-- Up to three destinations can be configured.
-- No Windows background service or scheduled task is installed.
-- Scheduled copies run only while StoreFlow is open.
-- If an interval expires while the app is closed, a due backup is attempted after the next launch.
-- Timestamped SQLite snapshots are written to each configured folder.
+1. Open Settings and choose up to three existing backup folders (for example, a folder on another drive and an external USB drive).
+2. Set the interval and retention count, then save.
+3. Use the manual backup action once and confirm a timestamped SQLite file appears in each selected folder.
+4. Use Restore backup only with a StoreFlow backup file. Restore creates a safety copy of the current database before replacing it.
 
-## Windows installer
+There is no Windows background service or scheduled task. Backups run while the app is open; a missed interval is checked again when the app launches.
 
-Install-StoreFlow.bat downloads the latest StoreFlow-Setup.exe and its SHA256 checksum from GitHub Releases, verifies the downloaded installer, then launches the NSIS setup wizard. The setup wizard creates desktop and Start Menu shortcuts.
+## Suggested acceptance test
 
-The BAT cannot install the app until the first Windows release is published from a v-prefixed Git tag.
+Before entering real inventory, create a few disposable products and accounts and verify:
+- Admin can see cost, gross margin and analytics.
+- Seller cannot see cost or gross profit and cannot edit products or stock.
+- A non-eligible product does not offer discounts.
+- Each preset discount matches the configured percentage of positive margin, not the selling price.
+- Stock decreases after a sale and increases after a valid return/void.
+- A duplicate or unavailable serial cannot be sold.
+- A4 and thermal print layouts are readable on the actual printer.
+- Backup and restore work using a test folder.
+
+Use test data first. Do not rely on the system for business-critical records until you have completed this acceptance test on your own Windows PC and printer/scanner setup.
 
 ## Development
 
-Requirements: Node.js 24 and npm. Windows is required to produce the Windows NSIS installer.
+Requirements: Node.js 24 and npm. Windows is required to build the Windows NSIS installer.
 
-    npm install
-    npm run dev
+```bash
+npm install
+npm run dev
 
-    npm run typecheck
-    npm run build
+npm run typecheck
+npm run build
+npm run test:database
+npm run dist:win
+```
 
-    npm run dist:win
+## Local data and uninstall
 
-## Local database
+The database is stored at Electron's `app.getPath('userData')/storeflow.sqlite` path. Uninstalling StoreFlow keeps user data by default. Back up the database before moving the app to another PC or deleting its Windows user profile.
 
-Database file: app.getPath('userData')/storeflow.sqlite
+## Current validation status
 
-Uninstalling StoreFlow keeps user data by default.
-
-## Security notes
-
-- Renderer has no direct Node.js access.
-- Context isolation is enabled and the preload API is limited to app operations.
-- Passwords are salted and hashed using scrypt.
-- Seller-facing API responses omit purchase costs.
-- Sales and inventory are not sent to a cloud service.
-
-## Next validation tasks
-
-1. Run GitHub Actions and resolve build issues.
-2. Test 2D HID scanner input on a Windows machine.
-3. Test A4 and thermal printing with actual printer models.
-4. Add full serial-number checkout selection and return workflow.
-5. Add automated tests for discount math, returns, voids and stock invariants.
-6. Verify backup restore and Windows installer behavior.
+GitHub Actions checks the TypeScript project, production bundles and database initialization. That is not a substitute for testing a real Windows installation, USB scanner, printer paper size and backup folder on the target PC.
