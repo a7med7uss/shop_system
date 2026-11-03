@@ -147,8 +147,8 @@ export interface StoreFlowAPI {
   updateProduct: (id:number,input:ProductInput) => Promise<Product>;
   adjustStock: (input:{productId:number;delta:number;unitCost?:number;reason:string;serials?:string[]}) => Promise<void>;
   dashboard: (from:string,to:string) => Promise<Dashboard>;
-  quoteSale: (input:{items:CartLine[];invoiceDiscountLevel:DiscountLevel}) => Promise<{subtotal:number;discountTotal:number;total:number}>;
-  createSale: (input:{items:CartLine[];invoiceDiscountLevel:DiscountLevel;paymentMethod:string;customerName?:string}) => Promise<Sale>;
+  quoteSale: (input:{items:CartLine[]}) => Promise<{subtotal:number;discountTotal:number;total:number}>;
+  createSale: (input:{items:CartLine[];paymentMethod:string;customerName?:string}) => Promise<Sale>;
   getSale: (id:string) => Promise<SaleDetails>;
   returnSaleItem: (input:{saleItemId:number;quantity:number;reason:string;serialNumbers?:string[]}) => Promise<void>;
   voidSale: (saleId:string,reason:string) => Promise<void>;
