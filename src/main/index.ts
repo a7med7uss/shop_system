@@ -60,9 +60,10 @@ async function backup(){
         output.push({path:dir,success:true,message:'تم النسخ'});
       }catch(e:any){output.push({path:dir,success:false,message:e.message||'فشل النسخ'});}
     }
-    const completed=now();
-    db.prepare("INSERT INTO settings(key,value) VALUES ('lastBackupAt',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(completed));
-    return {success:output.some(x=>x.success),completedAt:completed,results:output};
+    const success=output.some(x=>x.success);
+    const completed=success?now():'';
+    if(success)db.prepare("INSERT INTO settings(key,value) VALUES ('lastBackupAt',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(completed));
+    return {success,completedAt:completed,results:output};
   }finally{backupBusy=false;}
 }
 function scheduleBackup(){
