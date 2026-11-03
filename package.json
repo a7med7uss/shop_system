@@ -17,7 +17,7 @@
     "test:database": "node -e \"require('fs').mkdirSync('.ci',{recursive:true})\" && esbuild scripts/database-smoke.ts --bundle --platform=node --format=cjs --target=node24 --external:better-sqlite3 --outfile=.ci/database-smoke.cjs && node .ci/database-smoke.cjs"
   },
   "dependencies": {
-    "better-sqlite3": "^12.6.2",
+    "better-sqlite3": "^13.0.3",
     "lucide-react": "^0.468.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -54,7 +54,7 @@
     "asarUnpack": [
       "**/*.node"
     ],
-    "npmRebuild": true,
+    "npmRebuild": false,
     "win": {
       "target": [
         {
