@@ -55,10 +55,17 @@ export default function App(){
   if(cart.some(x=>x.product.serialTracking&&x.serialNumbers.length!==x.qty))return notify('حدد الرقم التسلسلي لكل قطعة قبل إتمام البيع.',true);
   setBusy(true);
   try{
-   const sale=await window.storeflow.createSale({items:cart.map(x=>({productId:x.product.id,quantity:x.qty,discountLevel:x.level,serialNumbers:x.serialNumbers})),paymentMethod:payment,customerName:customer});
-   const html=invoiceHtml(sale,cart,settings,subtotal,discount,total);
-   const result=await window.storeflow.printInvoice(html,settings.paperSize);
-   setCart([]);setCustomer('');await refresh();notify('تم حفظ الفاتورة. '+result.message);
+   const soldCart=cart;
+   const sale=await window.storeflow.createSale({items:soldCart.map(x=>({productId:x.product.id,quantity:x.qty,discountLevel:x.level,serialNumbers:x.serialNumbers})),paymentMethod:payment,customerName:customer});
+   setCart([]);setCustomer('');
+   await refresh();
+   const html=invoiceHtml(sale,soldCart,settings,sale.subtotal,sale.discountTotal,sale.total);
+   try{
+    const result=await window.storeflow.printInvoice(html,settings.paperSize);
+    notify('تم حفظ الفاتورة. '+result.message);
+   }catch(printError:any){
+    notify('تم حفظ الفاتورة، لكن تعذرت الطباعة: '+(printError.message||String(printError)),true);
+   }
   }catch(e:any){notify(e.message,true);}finally{setBusy(false);}
  };
  const saveConfig=async(e:React.FormEvent)=>{e.preventDefault();try{const x=await window.storeflow.saveSettings(settings);setSettings(x);await refresh();notify('تم حفظ الإعدادات.');}catch(e:any){notify(e.message,true);}};
