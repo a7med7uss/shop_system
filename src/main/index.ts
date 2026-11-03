@@ -212,7 +212,7 @@ function register(){
       if(!product)throw new Error('منتج غير متاح.');
       if(!Number.isInteger(item.quantity)||item.quantity<1)throw new Error('الكمية غير صحيحة.');
       if(product.stock_quantity<item.quantity)throw new Error('الكمية غير متاحة للمنتج '+product.name);
-      const level:DiscountLevel=settings.discountEnabled?(v.invoiceDiscountLevel||item.discountLevel||null):null;
+      const level:DiscountLevel=settings.discountEnabled?(item.discountLevel||null):null;
       const rate=level==='high'?settings.highDiscountPercent:level==='monster'?settings.monsterDiscountPercent:0;
       const margin=Math.max(0,product.selling_price-product.purchase_price)*item.quantity;
       subtotal+=product.selling_price*item.quantity;
@@ -248,7 +248,7 @@ function register(){
         }else if(serialNumbers.length){
           throw new Error('هذا المنتج لا يستخدم تتبع الأرقام التسلسلية.');
         }
-        const level:DiscountLevel=settings.discountEnabled?(v.invoiceDiscountLevel||item.discountLevel||null):null;
+        const level:DiscountLevel=settings.discountEnabled?(item.discountLevel||null):null;
         const rate=level==='high'?settings.highDiscountPercent:level==='monster'?settings.monsterDiscountPercent:0;
         const margin=Math.max(0,product.selling_price-product.purchase_price)*item.quantity;
         const lineDiscount=product.allow_discount?margin*rate/100:0;
