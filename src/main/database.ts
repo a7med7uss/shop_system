@@ -48,7 +48,7 @@ export function openDatabase(filePath: string) {
     "CREATE TABLE IF NOT EXISTS expenses (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, amount REAL NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS sale_returns (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_item_id INTEGER NOT NULL REFERENCES sale_items(id), quantity INTEGER NOT NULL, refund_amount REAL NOT NULL, reason TEXT NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id), action TEXT NOT NULL, details TEXT NOT NULL, created_at TEXT NOT NULL)"
-  ].join('\n'));
+  ].join(';\n'));
 
   const saleItemColumns = db.pragma('table_info(sale_items)') as Array<{ name: string }>;
   if (!saleItemColumns.some(column => column.name === 'returned_quantity')) {
