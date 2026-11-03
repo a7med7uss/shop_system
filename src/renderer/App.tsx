@@ -55,7 +55,7 @@ export default function App(){
   if(cart.some(x=>x.product.serialTracking&&x.serialNumbers.length!==x.qty))return notify('حدد الرقم التسلسلي لكل قطعة قبل إتمام البيع.',true);
   setBusy(true);
   try{
-   const sale=await window.storeflow.createSale({items:cart.map(x=>({productId:x.product.id,quantity:x.qty,discountLevel:x.level,serialNumbers:x.serialNumbers})),,paymentMethod:payment,customerName:customer});
+   const sale=await window.storeflow.createSale({items:cart.map(x=>({productId:x.product.id,quantity:x.qty,discountLevel:x.level,serialNumbers:x.serialNumbers})),paymentMethod:payment,customerName:customer});
    const html=invoiceHtml(sale,cart,settings,subtotal,discount,total);
    const result=await window.storeflow.printInvoice(html,settings.paperSize);
    setCart([]);setCustomer('');await refresh();notify('تم حفظ الفاتورة. '+result.message);
