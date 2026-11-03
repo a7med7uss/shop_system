@@ -48,6 +48,13 @@ if errorlevel 1 (
 )
 echo  [3/4] Starting StoreFlow Setup...
 start /wait "" "%INSTALLER%"
-echo  [4/4] Setup completed. A desktop shortcut is created by the setup wizard.
+if errorlevel 1 (
+  echo.
+  echo  Setup did not complete successfully. You can run the downloaded installer again:
+  echo  %INSTALLER%
+  pause
+  exit /b 1
+)
+echo  [4/4] Setup finished. Check the desktop for the StoreFlow shortcut.
 pause
 endlocal
