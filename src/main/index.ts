@@ -96,12 +96,15 @@ function scheduleBackup(){
   },60000);
 }
 function makeWindow(){
-  win=new BrowserWindow({width:1480,height:920,minWidth:1100,minHeight:700,backgroundColor:'#FFFFFF',title:'Kasho',icon:app.isPackaged?path.join(process.resourcesPath,'icon.ico'):path.join(process.cwd(),'build','icon.ico'),webPreferences:{preload:path.join(app.getAppPath(),'dist-electron','preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  win=new BrowserWindow({width:1480,height:920,minWidth:760,minHeight:560,backgroundColor:'#121110',title:'Kasho',icon:app.isPackaged?path.join(process.resourcesPath,'icon.ico'):path.join(process.cwd(),'build','icon.ico'),frame:false,autoHideMenuBar:true,webPreferences:{preload:path.join(app.getAppPath(),'dist-electron','preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   const dev=process.env.VITE_DEV_SERVER_URL;
   if(dev)win.loadURL(dev);else win.loadFile(path.join(app.getAppPath(),'dist','index.html'));
   win.on('closed',()=>{win=null;});
 }
 function register(){
+  ipcMain.handle('window:minimize',()=>{if(win&&!win.isDestroyed())win.minimize();});
+  ipcMain.handle('window:toggle-maximize',()=>{if(!win||win.isDestroyed())return false;if(win.isMaximized())win.unmaximize();else win.maximize();return win.isMaximized();});
+  ipcMain.handle('window:close',()=>{if(win&&!win.isDestroyed())win.close();});
   ipcMain.handle('app:bootstrap',()=>({hasAdmin:Number((db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin'").get() as any).n)>0,version:app.getVersion()}));
   ipcMain.handle('auth:setup',(_e,v)=>{
     if(Number((db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin'").get() as any).n))throw new Error('حساب الأدمن موجود بالفعل.');
@@ -120,7 +123,7 @@ function register(){
   ipcMain.handle('auth:current',()=>session);
   ipcMain.handle('auth:remember:get',async()=>readRememberedLogin());
   ipcMain.handle('auth:remember:set',async(_e,value)=>writeRememberedLogin(value));
-  ipcMain.handle('window:toggle-fullscreen',()=>{login();if(!win||win.isDestroyed())return false;const next=!win.isFullScreen();win.setFullScreen(next);return next;});
+  ipcMain.handle('window:toggle-fullscreen',()=>{if(!win||win.isDestroyed())return false;const next=!win.isFullScreen();win.setFullScreen(next);return next;});
   ipcMain.handle('settings:get',()=>{login();return getSettings(db);});
   ipcMain.handle('settings:save',(_e,v:StoreSettings)=>{
     const u=admin();if(!Array.isArray(v.backupPaths)||v.backupPaths.length>3)throw new Error('ثلاثة مسارات نسخ احتياطي كحد أقصى.');
