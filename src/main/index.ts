@@ -1,4 +1,4 @@
-import {app,BrowserWindow,ipcMain,dialog,shell,safeStorage} from 'electron';
+import {app,BrowserWindow,ipcMain,dialog,shell,safeStorage,session as electronSession} from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -95,6 +95,24 @@ function scheduleBackup(){
     if(!last||Date.now()-last>=span){try{await backup();}catch(e){console.error(e);}}
   },60000);
 }
+
+function configureCameraPermissions(){
+  const isKashoWindow=(contents:Electron.WebContents|null)=>{
+    if(!contents||!win||contents!==win.webContents)return false;
+    const url=contents.getURL();
+    return url.startsWith('file://')||url.startsWith('http://127.0.0.1:5173/');
+  };
+  electronSession.defaultSession.setPermissionCheckHandler((contents,permission,_origin,details)=>{
+    if(permission!=='media'||!isKashoWindow(contents))return false;
+    return details?.mediaType==='video';
+  });
+  electronSession.defaultSession.setPermissionRequestHandler((contents,permission,callback,details)=>{
+    const mediaTypes=details?.mediaTypes||[];
+    const videoOnly=Array.isArray(mediaTypes)&&mediaTypes.includes('video')&&!mediaTypes.includes('audio');
+    callback(permission==='media'&&isKashoWindow(contents)&&videoOnly);
+  });
+}
+
 function makeWindow(){
   win=new BrowserWindow({width:1480,height:920,minWidth:1100,minHeight:700,backgroundColor:'#FFFFFF',title:'Kasho',icon:app.isPackaged?path.join(process.resourcesPath,'icon.ico'):path.join(process.cwd(),'build','icon.ico'),webPreferences:{preload:path.join(app.getAppPath(),'dist-electron','preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   const dev=process.env.VITE_DEV_SERVER_URL;
@@ -360,6 +378,7 @@ app.whenReady().then(()=>{
     const langFile=path.join(app.getPath('userData'),'install-language.txt');
     try{const installedLanguage=fs.readFileSync(langFile,'utf8').trim();if(installedLanguage==='ar'||installedLanguage==='en')saveSettings(db,{...getSettings(db),language:installedLanguage});}catch{}
   }
+  configureCameraPermissions();
   register();makeWindow();scheduleBackup();
   const s=getSettings(db);
   const span=Math.max(1,s.backupIntervalHours||24)*3600000;

@@ -66,6 +66,8 @@ export interface StoreSettings {
   backupPaths: string[];
   backupIntervalHours: number;
   lastBackupAt: string;
+  scannerCameraId: string;
+  scannerCameraLabel: string;
 }
 
 export interface Sale {

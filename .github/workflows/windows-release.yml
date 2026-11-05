@@ -32,14 +32,14 @@ jobs:
           $hash = (Get-FileHash "release/Kasho-Setup.exe" -Algorithm SHA256).Hash.ToLower()
           "$hash  Kasho-Setup.exe" | Set-Content "release/Kasho-Setup.exe.sha256" -NoNewline
 
-      - name: Check whether Kasho v1.0.2 release already exists
+      - name: Check whether Kasho v1.0.3 release already exists
         if: github.ref == 'refs/heads/main'
         id: first-release
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $uri = "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/releases/tags/v1.0.2"
+          $uri = "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/releases/tags/v1.0.3"
           $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = "application/vnd.github+json" }
           try {
             Invoke-RestMethod -Uri $uri -Headers $headers | Out-Null
@@ -49,13 +49,13 @@ jobs:
             if ($status -eq 404) { "publish=true" >> $env:GITHUB_OUTPUT } else { throw }
           }
 
-      - name: Publish Kasho v1.0.2 from main
+      - name: Publish Kasho v1.0.3 from main
         if: github.ref == 'refs/heads/main' && steps.first-release.outputs.publish == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.2
+          tag_name: v1.0.3
           target_commitish: main
-          name: Kasho v1.0.2
+          name: Kasho v1.0.3
           generate_release_notes: true
           files: |
             release/Kasho-Setup.exe

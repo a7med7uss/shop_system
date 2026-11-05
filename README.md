@@ -41,7 +41,16 @@ The installer includes the runtime. Node.js, Git, and SQLite do not need to be i
 
 A common USB scanner in keyboard-wedge/HID mode behaves like a keyboard. When the barcode field is focused, the scanner types the code and usually sends Enter. This mode does not expose a reliable device identity to the app, so it cannot be shown as a separate selectable scanner device.
 
-The product search's QR icon focuses the search field for a scanner input. It does not yet turn the PC into a camera-based QR reader.
+Kasho includes an in-app camera scanner for common 1D/2D barcodes and QR codes. Admins can discover available cameras and select a default source under Settings → Camera scanner. The product barcode field, product search, and POS scan field each have a camera button; a detected code is sent back to the active field. Kasho requests video permission only, not microphone access. USB HID scanners continue to work as keyboard input.
+
+### Use an Android phone as a camera without a Kasho mobile app
+
+- **Windows 11 over Wi-Fi:** pair the phone using Phone Link / Link to Windows. In Windows Settings, open Bluetooth & devices → Mobile devices and enable **Use as connected camera**. The feature requires Windows 11, Android 10+, and Link to Windows 1.24022.0+. The phone then appears to Windows as a webcam that Kasho can select. Microsoft's Link to Windows component is separate from a Kasho mobile app.
+- **USB webcam route:** Android 14 QPR1+ includes a UVC webcam capability, but the phone/OEM must expose and support that USB webcam mode. Connect the phone and select it in Kasho if Windows enumerates it as a camera.
+- **Windows 10:** a phone or USB camera can work if Windows detects it as a normal webcam, but Microsoft's Phone Link connected-camera feature is documented for Windows 11.
+
+If the phone does not appear in Windows as a webcam, Kasho cannot read its camera directly over plain USB/Wi-Fi without another bridge or a separate phone-side scanner page. This release does not include a custom Android/iOS app and does not claim universal automatic phone connection. Camera focus, lighting, distance, and code quality affect scan speed; test with your real phone and product labels.
+
 
 ## Backup and restore
 

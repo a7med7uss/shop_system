@@ -37,6 +37,7 @@ async function run() {
       throw new Error('Unexpected first-run defaults.');
     }
     if (settings.backupPaths.length !== 3) throw new Error('Expected exactly three backup destinations.');
+    if (settings.scannerCameraId !== '' || settings.scannerCameraLabel !== '') throw new Error('Camera settings should be empty before an admin selects a camera.');
 
     const password = 'KashoSmoke#2026';
     const stored = hashPassword(password);

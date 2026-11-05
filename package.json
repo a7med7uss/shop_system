@@ -1,6 +1,6 @@
 {
   "name": "storeflow",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "Kasho — Scan. Sell. Done. Local-first retail management system",
   "author": "Ahmed Hussein Emara",
@@ -22,7 +22,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "@fontsource/ibm-plex-sans-arabic": "^5.2.6",
-    "@fontsource/plus-jakarta-sans": "^5.2.6"
+    "@fontsource/plus-jakarta-sans": "^5.2.6",
+    "@zxing/browser": "^0.2.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

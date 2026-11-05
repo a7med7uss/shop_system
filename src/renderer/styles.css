@@ -151,3 +151,28 @@ button,input,select,textarea{font-family:inherit}
 @media(max-width:900px){.auth{grid-template-columns:1fr}.auth-left{display:none}.auth-form{grid-column:1;grid-row:1;min-height:calc(100vh - 32px);max-width:480px;padding:22px 18px}}
 
 .auth-form .form-logo{margin-bottom:28px}.auth-form>small{letter-spacing:.3px;font-size:12px}.auth-form>small:first-of-type{color:#C94600}.auth-left{background:radial-gradient(900px 500px at 70% 0%,#2E2824,#171413 70%)}
+
+/* Camera barcode scanner */
+.scanner-settings-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:12px;margin-top:12px;}
+.scanner-settings-row .field{min-width:0;margin:0;}
+.scanner-settings-row>button{min-height:42px;white-space:nowrap;}
+.camera-inline-button{background:#F25C05!important;color:#fff!important;border-color:#F25C05!important;}
+.camera-inline-button:hover{background:#C94600!important;}
+.camera-modal{width:min(760px,94vw);max-height:92vh;overflow:auto;}
+.camera-device-row{display:grid;grid-template-columns:130px minmax(0,1fr);align-items:center;gap:12px;margin:10px 0 14px;}
+.camera-device-row label{font-size:12px;color:var(--muted);font-weight:700;}
+.camera-device-row select{width:100%;height:42px;}
+.camera-preview{position:relative;overflow:hidden;display:grid;place-items:center;width:100%;min-height:220px;max-height:58vh;aspect-ratio:16/10;background:#0D0D0D;border-radius:16px;}
+.camera-preview video{display:block;width:100%;height:100%;max-height:58vh;object-fit:contain;}
+.camera-scan-frame{position:absolute;inset:23% 18%;border:2px solid #F25C05;border-radius:14px;box-shadow:0 0 0 999px rgba(0,0,0,.16);pointer-events:none;}
+.camera-loading,.camera-error{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:22px;text-align:center;color:#fff;background:rgba(0,0,0,.72);}
+.camera-error p{max-width:540px;line-height:1.65;margin:0;}
+.camera-loading .spin{animation:cameraSpin 1s linear infinite;}
+@keyframes cameraSpin{to{transform:rotate(360deg)}}
+.camera-footer{display:flex;flex-direction:column;gap:7px;margin:14px 0 5px;color:var(--muted);font-size:12px;}
+.camera-footer span{display:flex;align-items:center;gap:8px;color:var(--green);font-weight:700;}
+.camera-footer small{font-size:11px;color:var(--muted);}
+.camera-help{margin:10px 0;padding:10px 12px;background:var(--orange-soft);color:var(--muted);border-radius:10px;font-size:11px;line-height:1.6;}
+.camera-overlay{z-index:1000;}
+@media(max-width:600px){.scanner-settings-row{grid-template-columns:1fr}.camera-device-row{grid-template-columns:1fr}.camera-preview{min-height:190px}}
+@media(prefers-reduced-motion:reduce){.camera-loading .spin{animation:none}}
