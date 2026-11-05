@@ -1,7 +1,7 @@
 !include "LogicLib.nsh"
 
 !macro customInstall
-  ; Preserve the previous data directory during the StoreFlow -> Kasho upgrade.
+  ; Preserve user data across StoreFlow/Kasho upgrades.
   CreateDirectory "$APPDATA\storeflow"
   Delete "$DESKTOP\StoreFlow.lnk"
   Delete "$DESKTOP\Kasho.lnk"
@@ -28,11 +28,25 @@
 !macroend
 
 !macro customUnInstall
-  Delete "$DESKTOP\\Kasho.lnk"
-  Delete "$DESKTOP\\كاشو.lnk"
-  Delete "$SMPROGRAMS\\Kasho\\Kasho.lnk"
-  Delete "$SMPROGRAMS\\كاشو\\كاشو.lnk"
-  RMDir "$SMPROGRAMS\\Kasho"
-  RMDir "$SMPROGRAMS\\كاشو"
-  ; Deliberately do not delete $APPDATA\\storeflow (user database/backups).
+  Delete "$DESKTOP\Kasho.lnk"
+  Delete "$DESKTOP\كاشو.lnk"
+  Delete "$SMPROGRAMS\Kasho\Kasho.lnk"
+  Delete "$SMPROGRAMS\كاشو\كاشو.lnk"
+  RMDir "$SMPROGRAMS\Kasho"
+  RMDir "$SMPROGRAMS\كاشو"
+
+  ; Optional full reset: deletes local database (including user accounts),
+  ; remembered credentials and settings. Documents/Kasho/Backups is preserved.
+  ${If} $LANGUAGE == 1025
+    MessageBox MB_YESNO|MB_ICONQUESTION "هل تريد حذف بيانات Kasho بالكامل؟\nسيؤدي ذلك إلى حذف حسابات المستخدمين والمنتجات والمبيعات والإعدادات وبيانات تسجيل الدخول المحفوظة. لن تُحذف النسخ الاحتياطية الموجودة في المستندات." IDYES un_delete_kasho_data IDNO un_keep_kasho_data
+  ${Else}
+    MessageBox MB_YESNO|MB_ICONQUESTION "Delete all Kasho data?\nThis removes user accounts, products, sales, settings and remembered login details. Backups in Documents will be kept." IDYES un_delete_kasho_data IDNO un_keep_kasho_data
+  ${EndIf}
+un_delete_kasho_data:
+  RMDir /r "$APPDATA\storeflow"
+  RMDir /r "$APPDATA\Kasho"
+  RMDir /r "$APPDATA\StoreFlow"
+  Goto un_done_kasho_uninstall
+un_keep_kasho_data:
+un_done_kasho_uninstall:
 !macroend
