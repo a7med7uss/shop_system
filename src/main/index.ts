@@ -128,6 +128,7 @@ function register(){
     s.highDiscountPercent=Math.max(0,Math.min(100,Number(s.highDiscountPercent)||0));
     s.monsterDiscountPercent=Math.max(0,Math.min(100,Number(s.monsterDiscountPercent)||0));
     s.backupIntervalHours=Math.max(1,Number(s.backupIntervalHours)||24);
+    s.fontScale=Math.max(0.9,Math.min(1.2,Number(s.fontScale)||1));
     saveSettings(db,s);audit(db,u.id,'settings.updated',{currency:s.currency,paperSize:s.paperSize});scheduleBackup();return s;
   });
   ipcMain.handle('dialog:directory',async()=>{admin();const r=await dialog.showOpenDialog(win!,{properties:['openDirectory','createDirectory']});return r.canceled?null:r.filePaths[0];});
