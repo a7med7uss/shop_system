@@ -591,3 +591,12 @@ html{font-size:16px}
  .setup-store-fields .form-grid{grid-template-columns:1fr}
  .welcome-word{white-space:normal;line-height:1.35;padding:0 18px}
 }
+
+/* Font size must not alter the rail's viewport geometry. */
+.rail{
+  height:100dvh!important;
+  min-height:100dvh!important;
+}
+.cart{
+  height:calc(100dvh - 98px)!important;
+}
