@@ -225,6 +225,7 @@ function register(){
     saveSettings(db,saved);
     return saved;
   });
+  ipcMain.handle('settings:get',()=>{login();return getSettings(db);});
   ipcMain.handle('settings:theme',(_e,theme)=>{const u=login();if(!['system','light','dark'].includes(theme))throw new Error('الثيم غير صالح.');db.prepare('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('theme',JSON.stringify(theme));audit(db,u.id,'settings.theme-changed',{theme});return theme;});
   ipcMain.handle('settings:save',(_e,v:StoreSettings)=>{
     const u=admin();if(!Array.isArray(v.backupPaths)||v.backupPaths.length>3)throw new Error('ثلاثة مسارات نسخ احتياطي كحد أقصى.');
