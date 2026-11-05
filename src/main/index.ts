@@ -11,6 +11,54 @@ let databasePath='';
 const rememberFile=()=>path.join(app.getPath('userData'),'remembered-login.bin');
 app.setName('storeflow');
 app.setAppUserModelId('com.ahmedhusseinemara.storeflow');
+
+/**
+ * Keep user data from older Kasho/StoreFlow package identities.
+ * A changed Electron app name changes app.getPath('userData') on Windows;
+ * without this migration an upgrade can silently look like a brand-new install.
+ * Never overwrite an existing canonical database or choose between multiple
+ * legacy databases automatically.
+ */
+async function migrateLegacyDatabase(targetPath:string) {
+  if(fs.existsSync(targetPath)) return false;
+  const appData=app.getPath('appData');
+  const candidates=[
+    path.join(appData,'Kasho','storeflow.sqlite'),
+    path.join(appData,'Kasho','kasho.sqlite'),
+    path.join(appData,'StoreFlow','storeflow.sqlite'),
+    path.join(appData,'StoreFlow','kasho.sqlite')
+  ].filter(file=>fs.existsSync(file));
+  if(candidates.length===0) return false;
+  if(candidates.length>1) {
+    throw new Error('تم العثور على أكثر من قاعدة بيانات قديمة. لم يتم إنشاء قاعدة جديدة أو استبدال أي بيانات. انقل قاعدة البيانات الصحيحة إلى مجلد بيانات Kasho ثم أعد التشغيل.');
+  }
+  const source=candidates[0];
+  const legacy=new Database(source,{readonly:true,fileMustExist:true});
+  try {
+    const integrity=legacy.pragma('integrity_check',{simple:true});
+    const hasUsers=!!legacy.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").get();
+    if(integrity!=='ok'||!hasUsers) {
+      throw new Error('قاعدة البيانات القديمة موجودة لكنها غير سليمة أو لا تحتوي على بيانات Kasho المتوقعة. لم يتم استبدالها.');
+    }
+    await legacy.backup(targetPath);
+  } finally {
+    legacy.close();
+  }
+  const migrated=new Database(targetPath,{readonly:true,fileMustExist:true});
+  try {
+    const integrity=migrated.pragma('integrity_check',{simple:true});
+    const hasUsers=!!migrated.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").get();
+    if(integrity!=='ok'||!hasUsers) throw new Error('تعذر التحقق من نسخة قاعدة البيانات بعد ترحيلها. قاعدة البيانات الأصلية ما زالت محفوظة.');
+  } finally {
+    migrated.close();
+  }
+  const legacyLanguage=path.join(path.dirname(source),'install-language.txt');
+  const targetLanguage=path.join(path.dirname(targetPath),'install-language.txt');
+  if(!fs.existsSync(targetLanguage)&&fs.existsSync(legacyLanguage)) {
+    fs.copyFileSync(legacyLanguage,targetLanguage);
+  }
+  return true;
+}
 let win:BrowserWindow|null=null;
 let session:any=null;
 let backupTimer:NodeJS.Timeout|null=null;
@@ -355,8 +403,9 @@ function register(){
     return new Promise(resolve=>p.webContents.print({silent:false,printBackground:true,pageSize:paper,margins:{marginType:size==='A4'?'default':'none'}},(ok,reason)=>{if(!p.isDestroyed())p.close();resolve({success:ok,message:reason|| (ok?'تم إرسال الفاتورة للطباعة.':'تعذرت الطباعة.')});}));
   });
 }
-app.whenReady().then(()=>{
+app.whenReady().then(async()=>{
   databasePath=path.join(app.getPath('userData'),'storeflow.sqlite');
+  await migrateLegacyDatabase(databasePath);
   db=openDatabase(databasePath);
   const adminCount=Number((db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin'").get() as any).n);
   if(!adminCount){
