@@ -50,6 +50,17 @@ export function openDatabase(filePath: string) {
     "CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id), action TEXT NOT NULL, details TEXT NOT NULL, created_at TEXT NOT NULL)"
   ].join(';\n'));
 
+  const productColumns = db.pragma('table_info(products)') as Array<{ name: string }>;
+  const productColumnNames = new Set(productColumns.map(column => column.name));
+  if (!productColumnNames.has('visual_type')) db.exec("ALTER TABLE products ADD COLUMN visual_type TEXT NOT NULL DEFAULT 'default'");
+  if (!productColumnNames.has('icon_key')) db.exec("ALTER TABLE products ADD COLUMN icon_key TEXT NOT NULL DEFAULT ''");
+  if (!productColumnNames.has('visual_color')) db.exec("ALTER TABLE products ADD COLUMN visual_color TEXT NOT NULL DEFAULT ''");
+  if (!productColumnNames.has('image_data')) db.exec("ALTER TABLE products ADD COLUMN image_data TEXT NOT NULL DEFAULT ''");
+
+  // Older products were recorded as an opening balance. Treat that starting stock
+  // as a normal stock addition in the movement history, without changing quantities.
+  db.prepare("UPDATE inventory_movements SET type='restock', reason='إضافة مخزون عند إنشاء المنتج' WHERE type='opening'").run();
+
   const saleItemColumns = db.pragma('table_info(sale_items)') as Array<{ name: string }>;
   if (!saleItemColumns.some(column => column.name === 'returned_quantity')) {
     db.exec('ALTER TABLE sale_items ADD COLUMN returned_quantity INTEGER NOT NULL DEFAULT 0');
