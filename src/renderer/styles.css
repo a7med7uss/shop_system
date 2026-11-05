@@ -322,3 +322,11 @@ body{font-size:calc(14px * var(--kasho-font-scale,1))}
  .topbar-clock{display:none}
  .topbar>div{gap:6px}
 }
+
+
+/* Apply the selected font scale consistently to fixed-size UI labels and controls. */
+body{zoom:var(--kasho-font-scale,1)}
+.close-confirm-text{font-size:14px;line-height:1.8;margin:12px 2px 20px;color:var(--text)}
+.modal-actions .danger{border:0;background:var(--red);color:#fff;border-radius:10px;padding:10px 18px;font-weight:800}
+.close-app-trigger{color:var(--red);border-color:color-mix(in srgb,var(--red) 35%,var(--line))}
+.close-app-trigger:hover{background:color-mix(in srgb,var(--red) 10%,var(--surface));}
