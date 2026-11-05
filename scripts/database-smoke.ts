@@ -37,6 +37,7 @@ async function run() {
       throw new Error('Unexpected first-run defaults.');
     }
     if (settings.backupPaths.length !== 3) throw new Error('Expected exactly three backup destinations.');
+    if (settings.confirmSaleEnabled !== false) throw new Error('Sale confirmation must be disabled by default.');
 
     const password = 'KashoSmoke#2026';
     const stored = hashPassword(password);
@@ -57,6 +58,29 @@ async function run() {
       'INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)'
     ).run(productId, 'opening', 7, 'Smoke test', userId, createdAt);
 
+    const saleId='smoke-sale-'+stamp;
+    db.prepare(
+      'INSERT INTO sales(id,invoice_number,cashier_user_id,subtotal,discount_total,total,currency,currency_symbol,payment_method,customer_name,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+    ).run(saleId,'SMOKE-'+stamp,userId,90,9,81,'EGP','ج.م','cash','','completed',createdAt);
+    const itemId=Number(db.prepare(
+      'INSERT INTO sale_items(sale_id,product_id,product_name,quantity,returned_quantity,unit_purchase_cost,unit_selling_price,discount_amount,discount_level,serial_numbers) VALUES (?,?,?,?,?,?,?,?,?,?)'
+    ).run(saleId,productId,'Kasho smoke product',3,0,5,30,9,null,'[]').lastInsertRowid);
+    const refundAmount=27;
+    db.prepare('UPDATE sale_items SET returned_quantity=returned_quantity+1 WHERE id=?').run(itemId);
+    db.prepare('INSERT INTO sale_returns(sale_item_id,quantity,refund_amount,reason,user_id,created_at) VALUES (?,?,?,?,?,?)')
+      .run(itemId,1,refundAmount,'Smoke return',userId,createdAt);
+    const refunded=Number((db.prepare('SELECT COALESCE(SUM(refund_amount),0) amount FROM sale_returns r JOIN sale_items si ON si.id=r.sale_item_id WHERE si.sale_id=?').get(saleId) as {amount:number}).amount);
+    const netTotal=Math.max(0,81-refunded);
+    db.prepare('UPDATE sales SET total=? WHERE id=?').run(netTotal,saleId);
+    const netSale=db.prepare('SELECT total FROM sales WHERE id=?').get(saleId) as {total:number};
+    if(netSale.total!==54)throw new Error('A partial return did not reduce the invoice total.');
+    db.prepare('UPDATE products SET active=0 WHERE id=?').run(productId);
+    db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)').run(productId,'deleted',0,'حذف المنتج من المخزون',userId,createdAt);
+    const deletionMovement=db.prepare("SELECT COUNT(*) n FROM inventory_movements WHERE product_id=? AND type='deleted'").get(productId) as {n:number};
+    if(deletionMovement.n!==1)throw new Error('Product archive was not recorded in the inventory activity log.');
+    const historicalItem=db.prepare('SELECT COUNT(*) n FROM sale_items WHERE sale_id=? AND product_id=?').get(saleId,productId) as {n:number};
+    if(historicalItem.n!==1)throw new Error('Archiving a product removed its historical invoice line.');
+
     await db.backup(backupFile);
     const backupCheck = validateBackupDatabase(backupFile);
     if (!backupCheck.valid) throw new Error('Valid backup was rejected: ' + backupCheck.message);
@@ -67,8 +91,28 @@ async function run() {
     if (!restoredProduct || restoredProduct.name !== 'Kasho smoke product' || restoredProduct.stock_quantity !== 7) {
       throw new Error('Backup restore did not preserve product and inventory data.');
     }
-    const restoredMovement = restored.prepare('SELECT COUNT(*) n FROM inventory_movements WHERE product_id=?').get(productId) as {n:number};
-    if (restoredMovement.n !== 1) throw new Error('Backup restore did not preserve inventory history.');
+    const restoredMovements = restored.prepare('SELECT type,quantity_delta,reason,user_id FROM inventory_movements WHERE product_id=? ORDER BY id').all(productId) as Array<{type:string;quantity_delta:number;reason:string;user_id:number}>;
+    // openDatabase intentionally normalizes legacy "opening" movements to "restock"
+    // and standardizes their reason during schema migration. Verify the persisted,
+    // post-migration representation rather than the pre-migration label.
+    const restoredOpening = restoredMovements.find(m =>
+      m.type === 'restock' &&
+      m.quantity_delta === 7 &&
+      m.reason === 'إضافة مخزون عند إنشاء المنتج' &&
+      m.user_id === userId
+    );
+    const restoredDeletion = restoredMovements.find(m =>
+      m.type === 'deleted' &&
+      m.quantity_delta === 0 &&
+      m.reason === 'حذف المنتج من المخزون' &&
+      m.user_id === userId
+    );
+    if (restoredMovements.length !== 2 || !restoredOpening || !restoredDeletion) {
+      throw new Error(
+        'Backup restore did not preserve expected inventory history: ' +
+        JSON.stringify(restoredMovements)
+      );
+    }
 
     partial = new Database(partialFile);
     partial.exec('CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT NOT NULL)');

@@ -11,6 +11,61 @@ let databasePath='';
 const rememberFile=()=>path.join(app.getPath('userData'),'remembered-login.bin');
 app.setName('storeflow');
 app.setAppUserModelId('com.ahmedhusseinemara.storeflow');
+
+/**
+ * Keep user data from older Kasho/StoreFlow package identities.
+ * A changed Electron app name changes app.getPath('userData') on Windows;
+ * without this migration an upgrade can silently look like a brand-new install.
+ * Never overwrite an existing canonical database or choose between multiple
+ * legacy databases automatically.
+ */
+async function migrateLegacyDatabase(targetPath:string) {
+  if(fs.existsSync(targetPath)) return false;
+  const appData=app.getPath('appData');
+  const candidates=[
+    path.join(appData,'Kasho','storeflow.sqlite'),
+    path.join(appData,'Kasho','kasho.sqlite'),
+    path.join(appData,'StoreFlow','storeflow.sqlite'),
+    path.join(appData,'StoreFlow','kasho.sqlite')
+  ].filter(file=>fs.existsSync(file));
+  if(candidates.length===0) return false;
+  if(candidates.length>1) {
+    throw new Error('تم العثور على أكثر من قاعدة بيانات قديمة. لم يتم إنشاء قاعدة جديدة أو استبدال أي بيانات. انقل قاعدة البيانات الصحيحة إلى مجلد بيانات Kasho ثم أعد التشغيل.');
+  }
+  const source=candidates[0];
+  try {
+    const legacy=new Database(source,{readonly:true,fileMustExist:true});
+    try {
+      const integrity=legacy.pragma('integrity_check',{simple:true});
+      const hasUsers=!!legacy.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").get();
+      if(integrity!=='ok'||!hasUsers) {
+        throw new Error('قاعدة البيانات القديمة موجودة لكنها غير سليمة أو لا تحتوي على بيانات Kasho المتوقعة. لم يتم استبدالها.');
+      }
+      await legacy.backup(targetPath);
+    } finally {
+      legacy.close();
+    }
+    const migrated=new Database(targetPath,{readonly:true,fileMustExist:true});
+    try {
+      const integrity=migrated.pragma('integrity_check',{simple:true});
+      const hasUsers=!!migrated.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").get();
+      if(integrity!=='ok'||!hasUsers) throw new Error('تعذر التحقق من نسخة قاعدة البيانات بعد ترحيلها. قاعدة البيانات الأصلية ما زالت محفوظة.');
+    } finally {
+      migrated.close();
+    }
+  } catch(error) {
+    for(const suffix of ['', '-wal', '-shm']) {
+      try { fs.unlinkSync(targetPath+suffix); } catch {}
+    }
+    throw error;
+  }
+  const legacyLanguage=path.join(path.dirname(source),'install-language.txt');
+  const targetLanguage=path.join(path.dirname(targetPath),'install-language.txt');
+  if(!fs.existsSync(targetLanguage)&&fs.existsSync(legacyLanguage)) {
+    fs.copyFileSync(legacyLanguage,targetLanguage);
+  }
+  return true;
+}
 let win:BrowserWindow|null=null;
 let session:any=null;
 let backupTimer:NodeJS.Timeout|null=null;
@@ -20,28 +75,59 @@ const login=()=>{if(!session)throw new Error('سجّل الدخول أولاً.'
 const admin=()=>{const u=login();if(u.role!=='admin')throw new Error('هذه العملية للأدمن فقط.');return u;};
 const userDto=(r:any)=>({id:r.id,username:r.username,displayName:r.display_name,role:r.role});
 function productDto(row:any){
-  const dto:any={id:row.id,name:row.name,brand:row.brand,model:row.model,category:row.category,genericCategory:row.generic_category,barcode:row.barcode||'',sellingPrice:row.selling_price,stockQuantity:row.stock_quantity,allowDiscount:!!row.allow_discount,lowStockThreshold:row.low_stock_threshold,tags:(db.prepare('SELECT tag FROM product_tags WHERE product_id=? ORDER BY tag').all(row.id) as any[]).map(x=>x.tag)};
+  const dto:any={id:row.id,name:row.name,brand:row.brand,model:row.model,category:row.category,genericCategory:row.generic_category,barcode:row.barcode||'',sellingPrice:row.selling_price,stockQuantity:row.stock_quantity,allowDiscount:!!row.allow_discount,lowStockThreshold:row.low_stock_threshold,visualType:row.visual_type||'default',iconKey:row.icon_key||'',visualColor:row.visual_color||'',imageData:row.image_data||'',tags:(db.prepare('SELECT tag FROM product_tags WHERE product_id=? ORDER BY tag').all(row.id) as any[]).map(x=>x.tag)};
   if(session?.role==='admin')dto.purchasePrice=row.purchase_price;
   return dto;
 }
 function tagsFor(id:number,tags:string[]){db.prepare('DELETE FROM product_tags WHERE product_id=?').run(id);const s=db.prepare('INSERT OR IGNORE INTO product_tags(product_id,tag) VALUES (?,?)');for(const item of tags||[]){const v=String(item).trim().replace(/^#+/,'');if(v)s.run(id,v.slice(0,50));}}
+function validateProductInput(input:ProductInput,stockQuantity:number,excludeId?:number){
+  const name=String(input.name||'').trim();
+  const brand=String(input.brand||'').trim();
+  const model=String(input.model||'').trim();
+  const category=String(input.category||'').trim();
+  const genericCategory=String(input.genericCategory||'').trim();
+  const barcode=String(input.barcode||'').trim();
+  const purchase=Number(input.purchasePrice);
+  const selling=Number(input.sellingPrice);
+  const threshold=Number(input.lowStockThreshold);
+  if(!name)throw new Error('اسم المنتج مطلوب.');
+  if(!brand)throw new Error('الماركة مطلوبة.');
+  if(!model&&!barcode)throw new Error('أدخل الموديل أو الباركود على الأقل.');
+  if(!category)throw new Error('التصنيف الفرعي مطلوب.');
+  if(!genericCategory)throw new Error('التصنيف العام مطلوب.');
+  if(!Number.isFinite(purchase)||purchase<=0)throw new Error('سعر الشراء/الجملة يجب أن يكون أكبر من صفر.');
+  if(!Number.isFinite(selling)||selling<=0)throw new Error('سعر البيع يجب أن يكون أكبر من صفر.');
+  if(!Number.isInteger(stockQuantity)||stockQuantity<=0)throw new Error('كمية المنتج يجب أن تكون أكبر من صفر.');
+  if(!Number.isInteger(threshold)||threshold<0||(threshold!==0&&threshold>=stockQuantity))throw new Error('حد التنبيه يجب أن يكون صفرًا أو أقل من الكمية المتاحة.');
+  const duplicate=db.prepare(`SELECT id,name,brand,model,barcode FROM products
+    WHERE active=1 AND id<>COALESCE(?, -1) AND (
+      (?<>'' AND lower(trim(COALESCE(barcode,'')))=lower(?)) OR
+      (?<>'' AND ?<>'' AND lower(trim(brand))=lower(?) AND lower(trim(model))=lower(?))
+    ) LIMIT 1`).get(excludeId??null,barcode,barcode,brand,model,brand,model) as any;
+  if(duplicate)throw new Error('هذا المنتج مسجل بالفعل ('+duplicate.name+'). ابحث عنه في المخزون واستخدم «إضافة كمية» بدل إنشاء منتج مكرر.');
+}
 function addProduct(input:ProductInput,userId:number){
-  if(!input.name?.trim())throw new Error('اسم المنتج مطلوب.');
+  const qty=Number(input.stockQuantity);
+  validateProductInput(input,qty);
+  const visualType=input.visualType||'default';
+  if(!['default','icon','color','image'].includes(visualType))throw new Error('نوع مظهر المنتج غير صالح.');
+  if(input.visualColor&&!/^#[0-9a-fA-F]{6}$/.test(input.visualColor))throw new Error('لون المنتج غير صالح.');
+  if(input.imageData&&(!/^data:image\/(png|jpeg|webp);base64,/.test(input.imageData)||input.imageData.length>2.1*1024*1024))throw new Error('صورة المنتج غير صالحة أو أكبر من الحد المسموح.');
+  if(visualType==='image'&&!input.imageData)throw new Error('اختر صورة المنتج أولاً.');
+  if(visualType==='icon'&&!input.iconKey)throw new Error('اختر أيقونة المنتج أولاً.');
   if(input.purchasePrice<0||input.sellingPrice<0)throw new Error('الأسعار يجب ألا تكون سالبة.');
-  const qty=Number(input.stockQuantity||0);
-  if(!Number.isInteger(qty)||qty<0)throw new Error('الكمية غير صحيحة.');
   const stamp=now();
   const tx=db.transaction(()=>{
-    const result=db.prepare('INSERT INTO products(name,brand,model,category,generic_category,barcode,purchase_price,selling_price,stock_quantity,allow_discount,serial_tracking,low_stock_threshold,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-      .run(input.name.trim(),input.brand||'',input.model||'',input.category||'',input.genericCategory||'',input.barcode?.trim()||null,input.purchasePrice,input.sellingPrice,qty,input.allowDiscount?1:0,0,input.lowStockThreshold||5,stamp,stamp);
+    const result=db.prepare('INSERT INTO products(name,brand,model,category,generic_category,barcode,purchase_price,selling_price,stock_quantity,allow_discount,serial_tracking,low_stock_threshold,visual_type,icon_key,visual_color,image_data,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(input.name.trim(),input.brand||'',input.model||'',input.category||'',input.genericCategory||'',input.barcode?.trim()||null,input.purchasePrice,input.sellingPrice,qty,input.allowDiscount?1:0,0,Number(input.lowStockThreshold),input.visualType||'default',input.iconKey||'',input.visualColor||'',input.imageData||'',stamp,stamp);
     const id=Number(result.lastInsertRowid);tagsFor(id,input.tags||[]);
-    if(qty)db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)').run(id,'opening',qty,'رصيد افتتاحي',userId,stamp);
+    if(qty)db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)').run(id,'restock',qty,'إضافة مخزون عند إنشاء المنتج',userId,stamp);
     audit(db,userId,'product.created',{id,name:input.name});
     return id;
   });
   return tx();
 }
-function saleDto(row:any){return {id:row.id,invoiceNumber:row.invoice_number,cashierName:row.cashier_name,subtotal:row.subtotal,discountTotal:row.discount_total,total:row.total,currency:row.currency,currencySymbol:row.currency_symbol,paymentMethod:row.payment_method,customerName:row.customer_name||'',status:row.status,createdAt:row.created_at};}
+function saleDto(row:any){return {id:row.id,invoiceNumber:row.invoice_number,cashierName:row.cashier_name,subtotal:row.subtotal,discountTotal:row.discount_total,total:row.total,totalRefunded:Number(row.total_refunded||0),currency:row.currency,currencySymbol:row.currency_symbol,paymentMethod:row.payment_method,customerName:row.customer_name||'',status:row.status,createdAt:row.created_at};}
 async function readRememberedLogin(){
   try{
     if(!fs.existsSync(rememberFile())||!(await safeStorage.isAsyncEncryptionAvailable()))return null;
@@ -96,13 +182,16 @@ function scheduleBackup(){
   },60000);
 }
 function makeWindow(){
-  win=new BrowserWindow({width:1480,height:920,minWidth:1100,minHeight:700,backgroundColor:'#FFFFFF',title:'Kasho',icon:app.isPackaged?path.join(process.resourcesPath,'icon.ico'):path.join(process.cwd(),'build','icon.ico'),webPreferences:{preload:path.join(app.getAppPath(),'dist-electron','preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  win=new BrowserWindow({width:1480,height:920,minWidth:760,minHeight:560,backgroundColor:'#121110',title:'Kasho',icon:app.isPackaged?path.join(process.resourcesPath,'icon.ico'):path.join(process.cwd(),'build','icon.ico'),frame:false,autoHideMenuBar:true,webPreferences:{preload:path.join(app.getAppPath(),'dist-electron','preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   const dev=process.env.VITE_DEV_SERVER_URL;
   if(dev)win.loadURL(dev);else win.loadFile(path.join(app.getAppPath(),'dist','index.html'));
   win.on('closed',()=>{win=null;});
 }
 function register(){
-  ipcMain.handle('app:bootstrap',()=>({hasAdmin:Number((db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin'").get() as any).n)>0,version:app.getVersion()}));
+  ipcMain.handle('window:minimize',()=>{if(win&&!win.isDestroyed())win.minimize();});
+  ipcMain.handle('window:toggle-maximize',()=>{if(!win||win.isDestroyed())return false;if(win.isMaximized())win.unmaximize();else win.maximize();return win.isMaximized();});
+  ipcMain.handle('window:close',()=>{if(win&&!win.isDestroyed())win.close();});
+  ipcMain.handle('app:bootstrap',()=>({hasAdmin:Number((db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin'").get() as any).n)>0,version:app.getVersion(),settings:getSettings(db)}));
   ipcMain.handle('auth:setup',(_e,v)=>{
     if(Number((db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin'").get() as any).n))throw new Error('حساب الأدمن موجود بالفعل.');
     if(!v.username?.trim()||!v.displayName?.trim()||String(v.password||'').length<8)throw new Error('أدخل البيانات وكلمة مرور من 8 أحرف على الأقل.');
@@ -120,8 +209,24 @@ function register(){
   ipcMain.handle('auth:current',()=>session);
   ipcMain.handle('auth:remember:get',async()=>readRememberedLogin());
   ipcMain.handle('auth:remember:set',async(_e,value)=>writeRememberedLogin(value));
-  ipcMain.handle('window:toggle-fullscreen',()=>{login();if(!win||win.isDestroyed())return false;const next=!win.isFullScreen();win.setFullScreen(next);return next;});
+  ipcMain.handle('window:toggle-fullscreen',()=>{if(!win||win.isDestroyed())return false;const next=!win.isFullScreen();win.setFullScreen(next);return next;});
+  ipcMain.handle('settings:setup',(_e,v:Partial<StoreSettings>)=>{
+    const count=Number((db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin'").get() as any).n);
+    if(count>0)throw new Error("تم إعداد حساب الأدمن بالفعل.");
+    const storeName=String(v.storeName||"").trim();
+    if(!storeName)throw new Error("اسم المتجر مطلوب لإكمال الإعداد.");
+    const current=getSettings(db);
+    const currencySymbols:Record<string,string>={EGP:"ج.م",USD:"$",EUR:"€",SAR:"ر.س",AED:"د.إ",GBP:"£",KWD:"د.ك"};
+    const language=v.language==="en"?"en":"ar";
+    const theme=(v.theme==="light"||v.theme==="dark"||v.theme==="system")?v.theme:"system";
+    const currency=currencySymbols[String(v.currency)]?String(v.currency):"EGP";
+    const fontScale=Math.max(0.9,Math.min(1.2,Number(v.fontScale)||1));
+    const saved:StoreSettings={...current,storeName,storeDescription:String(v.storeDescription||"").trim(),storeAddress:String(v.storeAddress||"").trim(),storePhone:String(v.storePhone||"").trim(),language,theme,currency,currencySymbol:currencySymbols[currency],fontScale};
+    saveSettings(db,saved);
+    return saved;
+  });
   ipcMain.handle('settings:get',()=>{login();return getSettings(db);});
+  ipcMain.handle('settings:theme',(_e,theme)=>{const u=login();if(!['system','light','dark'].includes(theme))throw new Error('الثيم غير صالح.');db.prepare('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('theme',JSON.stringify(theme));audit(db,u.id,'settings.theme-changed',{theme});return theme;});
   ipcMain.handle('settings:save',(_e,v:StoreSettings)=>{
     const u=admin();if(!Array.isArray(v.backupPaths)||v.backupPaths.length>3)throw new Error('ثلاثة مسارات نسخ احتياطي كحد أقصى.');
     const s={...getSettings(db),...v};
@@ -133,6 +238,15 @@ function register(){
   });
   ipcMain.handle('dialog:directory',async()=>{admin();const r=await dialog.showOpenDialog(win!,{properties:['openDirectory','createDirectory']});return r.canceled?null:r.filePaths[0];});
   ipcMain.handle('dialog:image',async()=>{admin();const r=await dialog.showOpenDialog(win!,{properties:['openFile'],filters:[{name:'Images',extensions:['png','jpg','jpeg','webp','svg']}]});return r.canceled?null:r.filePaths[0];});
+  ipcMain.handle('products:choose-image',async()=>{
+    admin();
+    const picked=await dialog.showOpenDialog(win!,{properties:['openFile'],filters:[{name:'Product images',extensions:['png','jpg','jpeg','webp']}]});
+    if(picked.canceled||!picked.filePaths[0])return null;
+    const file=picked.filePaths[0],stat=fs.statSync(file);
+    if(stat.size>1.5*1024*1024)throw new Error('حجم صورة المنتج يجب ألا يتجاوز 1.5 ميجابايت.');
+    const ext=path.extname(file).toLowerCase(),mime=ext==='.png'?'image/png':ext==='.webp'?'image/webp':'image/jpeg';
+    return 'data:'+mime+';base64,'+fs.readFileSync(file).toString('base64');
+  });
   ipcMain.handle('backup:run',async()=>{admin();return backup();});
   ipcMain.handle('backup:restore',async()=>{
     const actor=admin();
@@ -177,12 +291,35 @@ function register(){
   });
   ipcMain.handle('products:create',(_e,v:ProductInput)=>{const u=admin();return productDto(db.prepare('SELECT * FROM products WHERE id=?').get(addProduct(v,u.id)));});
   ipcMain.handle('products:update',(_e,id:number,v:ProductInput)=>{
-    const u=admin();const p=db.prepare('SELECT * FROM products WHERE id=?').get(id) as any;if(!p)throw new Error('المنتج غير موجود.');
+    const u=admin();
+    const existing=db.prepare('SELECT * FROM products WHERE id=? AND active=1').get(id) as any;
+    if(!existing)throw new Error('المنتج غير موجود.');
+    validateProductInput(v,Number(existing.stock_quantity),id);
+    if(!['default','icon','color','image'].includes(v.visualType||'default'))throw new Error('نوع مظهر المنتج غير صالح.');
+    if(v.visualColor&&!/^#[0-9a-fA-F]{6}$/.test(v.visualColor))throw new Error('لون المنتج غير صالح.');
+    if(v.imageData&&(!/^data:image\/(png|jpeg|webp);base64,/.test(v.imageData)||v.imageData.length>2.1*1024*1024))throw new Error('صورة المنتج غير صالحة أو أكبر من الحد المسموح.');
+    if(v.visualType==='image'&&!v.imageData)throw new Error('اختر صورة المنتج أولاً.');
+    if(v.visualType==='icon'&&!v.iconKey)throw new Error('اختر أيقونة المنتج أولاً.');
+    const p=existing;
     const tx=db.transaction(()=>{
-      db.prepare('UPDATE products SET name=?,brand=?,model=?,category=?,generic_category=?,barcode=?,purchase_price=?,selling_price=?,allow_discount=?,low_stock_threshold=?,updated_at=? WHERE id=?')
-        .run(v.name.trim(),v.brand||'',v.model||'',v.category||'',v.genericCategory||'',v.barcode?.trim()||null,v.purchasePrice,v.sellingPrice,v.allowDiscount?1:0,v.lowStockThreshold||5,now(),id);
+      db.prepare('UPDATE products SET name=?,brand=?,model=?,category=?,generic_category=?,barcode=?,purchase_price=?,selling_price=?,allow_discount=?,low_stock_threshold=?,visual_type=?,icon_key=?,visual_color=?,image_data=?,updated_at=? WHERE id=?')
+        .run(v.name.trim(),v.brand||'',v.model||'',v.category||'',v.genericCategory||'',v.barcode?.trim()||null,v.purchasePrice,v.sellingPrice,v.allowDiscount?1:0,Number(v.lowStockThreshold),v.visualType||'default',v.iconKey||'',v.visualColor||'',v.imageData||'',now(),id);
       tagsFor(id,v.tags||[]);audit(db,u.id,'product.updated',{id});
     });tx();return productDto(db.prepare('SELECT * FROM products WHERE id=?').get(id));
+  });
+  ipcMain.handle('products:delete',(_e,id:number)=>{
+    const u=admin();
+    const product=db.prepare('SELECT id,name,active FROM products WHERE id=?').get(id) as any;
+    if(!product||!product.active)throw new Error('المنتج غير موجود أو تم حذفه بالفعل.');
+    const tx=db.transaction(()=>{
+      const stamp=now();
+      db.prepare('UPDATE products SET active=0,updated_at=? WHERE id=?').run(stamp,id);
+      db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)')
+        .run(id,'deleted',0,'حذف المنتج من المخزون',u.id,stamp);
+      audit(db,u.id,'product.archived',{id,name:product.name});
+    });
+    tx();
+    return {success:true};
   });
   ipcMain.handle('stock:adjust',(_e,v)=>{
     const u=admin();const p=db.prepare('SELECT * FROM products WHERE id=? AND active=1').get(v.productId) as any;
@@ -197,12 +334,12 @@ function register(){
   });
   ipcMain.handle('dashboard:get',(_e,from:string,to:string)=>{
     const u=login();if(u.role!=='admin')throw new Error('التقارير للأدمن فقط.');
-    const totals=db.prepare("SELECT COUNT(*) n,COALESCE(SUM(s.subtotal),0)-COALESCE((SELECT SUM(r.refund_amount) FROM sale_returns r JOIN sale_items ri ON ri.id=r.sale_item_id JOIN sales rs ON rs.id=ri.sale_id WHERE rs.status!='void' AND rs.created_at BETWEEN ? AND ?),0) gross,COALESCE(SUM(s.discount_total),0) discount,COALESCE(SUM(s.total),0)-COALESCE((SELECT SUM(r.refund_amount) FROM sale_returns r JOIN sale_items ri ON ri.id=r.sale_item_id JOIN sales rs ON rs.id=ri.sale_id WHERE rs.status!='void' AND rs.created_at BETWEEN ? AND ?),0) net FROM sales s WHERE s.status!='void' AND s.created_at BETWEEN ? AND ?").get(from,to,from,to,from,to) as any;
+    const totals=db.prepare("SELECT COUNT(*) n,COALESCE(SUM(s.subtotal),0)-COALESCE((SELECT SUM(ri.unit_selling_price*r.quantity) FROM sale_returns r JOIN sale_items ri ON ri.id=r.sale_item_id JOIN sales rs ON rs.id=ri.sale_id WHERE rs.status!='void' AND rs.created_at BETWEEN ? AND ?),0) gross,COALESCE(SUM(s.discount_total),0)-COALESCE((SELECT SUM(ri.discount_amount*r.quantity/MAX(1,ri.quantity)) FROM sale_returns r JOIN sale_items ri ON ri.id=r.sale_item_id JOIN sales rs ON rs.id=ri.sale_id WHERE rs.status!='void' AND rs.created_at BETWEEN ? AND ?),0) discount,COALESCE(SUM(s.total),0) net FROM sales s WHERE s.status!='void' AND s.created_at BETWEEN ? AND ?").get(from,to,from,to,from,to) as any;
     const cost=db.prepare("SELECT COALESCE(SUM(si.unit_purchase_cost*(si.quantity-COALESCE(si.returned_quantity,0))),0) value FROM sale_items si JOIN sales s ON s.id=si.sale_id WHERE s.status!='void' AND s.created_at BETWEEN ? AND ?").get(from,to) as any;
     const expenses=db.prepare('SELECT COALESCE(SUM(amount),0) value FROM expenses WHERE created_at BETWEEN ? AND ?').get(from,to) as any;
-    const items=db.prepare("SELECT COALESCE(SUM(si.quantity),0) value FROM sale_items si JOIN sales s ON s.id=si.sale_id WHERE s.status!='void' AND s.created_at BETWEEN ? AND ?").get(from,to) as any;
+    const items=db.prepare("SELECT COALESCE(SUM(si.quantity-COALESCE(si.returned_quantity,0)),0) value FROM sale_items si JOIN sales s ON s.id=si.sale_id WHERE s.status!='void' AND s.created_at BETWEEN ? AND ?").get(from,to) as any;
     const low=Number((db.prepare('SELECT COUNT(*) n FROM products WHERE active=1 AND stock_quantity<=low_stock_threshold').get() as any).n);
-    const top=db.prepare("SELECT product_name name,SUM(quantity) quantity,SUM(unit_selling_price*quantity-discount_amount) revenue FROM sale_items si JOIN sales s ON s.id=si.sale_id WHERE s.status!='void' AND s.created_at BETWEEN ? AND ? GROUP BY product_id,product_name ORDER BY quantity DESC LIMIT 5").all(from,to) as any[];
+    const top=db.prepare("SELECT product_name name,SUM(quantity-COALESCE(returned_quantity,0)) quantity,SUM(unit_selling_price*(quantity-COALESCE(returned_quantity,0))-discount_amount*(quantity-COALESCE(returned_quantity,0))/MAX(1,quantity)) revenue FROM sale_items si JOIN sales s ON s.id=si.sale_id WHERE s.status!='void' AND s.created_at BETWEEN ? AND ? GROUP BY product_id,product_name ORDER BY quantity DESC LIMIT 5").all(from,to) as any[];
     const c=Number(cost.value||0),net=Number(totals.net||0),exp=Number(expenses.value||0);
     return {grossSales:Number(totals.gross),discounts:Number(totals.discount),netSales:net,costOfGoods:c,grossProfit:net-c,expenses:exp,netProfit:net-c-exp,salesCount:Number(totals.n),itemsSold:Number(items.value),lowStockCount:low,topProducts:top};
   });
@@ -265,19 +402,25 @@ function register(){
       audit(db,u.id,'sale.completed',{id,invoice,total,discountTotal});
     });
     tx();
-    const row=db.prepare('SELECT s.*,u.display_name cashier_name FROM sales s JOIN users u ON u.id=s.cashier_user_id WHERE s.id=?').get(id) as any;
+    const row=db.prepare('SELECT s.*,u.display_name cashier_name,COALESCE((SELECT SUM(r.refund_amount) FROM sale_returns r JOIN sale_items si ON si.id=r.sale_item_id WHERE si.sale_id=s.id),0) total_refunded FROM sales s JOIN users u ON u.id=s.cashier_user_id WHERE s.id=?').get(id) as any;
     return saleDto(row);
   });
 
   ipcMain.handle('sales:list',()=>{
-    login();
-    return (db.prepare('SELECT s.*,u.display_name cashier_name FROM sales s JOIN users u ON u.id=s.cashier_user_id ORDER BY s.created_at DESC LIMIT 500').all() as any[]).map(saleDto);
+    const u=login();
+    const saleQuery=`SELECT s.*,u.display_name cashier_name,
+      COALESCE((SELECT SUM(r.refund_amount) FROM sale_returns r JOIN sale_items si ON si.id=r.sale_item_id WHERE si.sale_id=s.id),0) total_refunded
+      FROM sales s JOIN users u ON u.id=s.cashier_user_id`;
+    const rows=(u.role==='admin'
+      ? db.prepare(saleQuery+' ORDER BY s.created_at DESC LIMIT 500').all()
+      : db.prepare(saleQuery+' WHERE s.cashier_user_id=? ORDER BY s.created_at DESC LIMIT 500').all(u.id)) as any[];
+    return rows.map(saleDto);
   });
 
   ipcMain.handle('sales:get',(_e,id:string)=>{
-    login();
+    const actor=login();
     const row=db.prepare('SELECT s.*,u.display_name cashier_name FROM sales s JOIN users u ON u.id=s.cashier_user_id WHERE s.id=?').get(id) as any;
-    if(!row)throw new Error('الفاتورة غير موجودة.');
+    if(!row||(actor.role!=='admin'&&row.cashier_user_id!==actor.id))throw new Error('الفاتورة غير موجودة أو لا تملك صلاحية عرضها.');
     const items=db.prepare('SELECT * FROM sale_items WHERE sale_id=? ORDER BY id').all(id) as any[];
     return {
       ...saleDto(row),
@@ -296,9 +439,10 @@ function register(){
   });
 
   ipcMain.handle('sales:return-item',(_e,input)=>{
-    const u=admin();
-    const item=db.prepare('SELECT si.*,s.status sale_status,s.id sale_id FROM sale_items si JOIN sales s ON s.id=si.sale_id WHERE si.id=?').get(input.saleItemId) as any;
-    if(!item||item.sale_status==='void'||item.sale_status==='refunded')throw new Error('لا يمكن إرجاع هذا العنصر.');
+    const u=login();
+    const item=db.prepare('SELECT si.*,s.status sale_status,s.id sale_id,s.cashier_user_id,s.subtotal sale_subtotal,s.discount_total sale_discount_total FROM sale_items si JOIN sales s ON s.id=si.sale_id WHERE si.id=?').get(input.saleItemId) as any;
+    if(!item||(u.role!=='admin'&&item.cashier_user_id!==u.id))throw new Error('لا تملك صلاحية إرجاع هذا العنصر.');
+    if(item.sale_status==='void'||item.sale_status==='refunded')throw new Error('لا يمكن إرجاع هذا العنصر.');
     const quantity=Number(input.quantity);
     const remaining=item.quantity-(item.returned_quantity||0);
     if(!Number.isInteger(quantity)||quantity<1||quantity>remaining)throw new Error('كمية المرتجع غير صحيحة.');
@@ -312,39 +456,53 @@ function register(){
       db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)')
         .run(item.product_id,'return',quantity,'مرتجع فاتورة',u.id,now());
       const counts=db.prepare('SELECT COALESCE(SUM(quantity),0) total,COALESCE(SUM(returned_quantity),0) returned FROM sale_items WHERE sale_id=?').get(item.sale_id) as any;
+      const refunded=Number((db.prepare('SELECT COALESCE(SUM(r.refund_amount),0) amount FROM sale_returns r JOIN sale_items si ON si.id=r.sale_item_id WHERE si.sale_id=?').get(item.sale_id) as any).amount||0);
+      const originalTotal=Math.max(0,Number(item.sale_subtotal)-Number(item.sale_discount_total));
+      const netTotal=Math.max(0,Math.round((originalTotal-refunded)*100)/100);
       const status=counts.returned>=counts.total?'refunded':'partially_refunded';
-      db.prepare('UPDATE sales SET status=? WHERE id=?').run(status,item.sale_id);
+      db.prepare('UPDATE sales SET status=?,total=? WHERE id=?').run(status,netTotal,item.sale_id);
       audit(db,u.id,'sale.item-returned',{saleId:item.sale_id,saleItemId:item.id,quantity,refund});
     });
     transaction();
-    return {success:true,refund};
+    const totalRefunded=Number((db.prepare('SELECT COALESCE(SUM(r.refund_amount),0) amount FROM sale_returns r JOIN sale_items si ON si.id=r.sale_item_id WHERE si.sale_id=?').get(item.sale_id) as any).amount||0);
+    return {success:true,refund,totalRefunded,netTotal:Math.max(0,Math.round((Number(item.sale_subtotal)-Number(item.sale_discount_total)-totalRefunded)*100)/100)};
   });
 
   ipcMain.handle('sales:void',(_e,saleId:string,reason:string)=>{
-    const u=admin();
+    const u=login();
     const sale=db.prepare('SELECT * FROM sales WHERE id=?').get(saleId) as any;
-    if(!sale||sale.status==='void'||sale.status==='refunded')throw new Error('لا يمكن إلغاء هذه الفاتورة.');
+    if(!sale||(u.role!=='admin'&&sale.cashier_user_id!==u.id))throw new Error('لا تملك صلاحية التراجع عن هذه الفاتورة.');
+    if(sale.status==='void')throw new Error('تم التراجع عن هذه الفاتورة بالفعل.');
     const items=db.prepare('SELECT * FROM sale_items WHERE sale_id=?').all(saleId) as any[];
     const transaction=db.transaction(()=>{
       for(const item of items){
         const remaining=item.quantity-(item.returned_quantity||0);
         if(remaining>0){
           db.prepare('UPDATE products SET stock_quantity=stock_quantity+?,updated_at=? WHERE id=?').run(remaining,now(),item.product_id);
-          db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)')
-            .run(item.product_id,'void',remaining,'إلغاء فاتورة '+sale.invoice_number,u.id,now());
         }
+        db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)')
+          .run(item.product_id,'void',remaining,'تراجع عن بيع '+sale.invoice_number,u.id,now());
       }
       db.prepare("UPDATE sales SET status='void' WHERE id=?").run(saleId);
-      audit(db,u.id,'sale.voided',{saleId,reason});
+      audit(db,u.id,'sale.voided',{saleId,invoiceNumber:sale.invoice_number,reason,restoredItems:items.map(item=>({productId:item.product_id,quantity:item.quantity-(item.returned_quantity||0)}))});
     });
     transaction();
   });
 
-  ipcMain.handle('stock:movements',()=>{login();return (db.prepare('SELECT m.*,p.name product_name,u.display_name user_name FROM inventory_movements m JOIN products p ON p.id=m.product_id JOIN users u ON u.id=m.user_id ORDER BY m.created_at DESC LIMIT 300').all() as any[]).map(r=>({id:r.id,productName:r.product_name,type:r.type,quantityDelta:r.quantity_delta,reason:r.reason,userName:r.user_name,createdAt:r.created_at}));});
+  ipcMain.handle('stock:movements',()=>{
+    const actor=login();
+    const rows=(actor.role==='admin'
+      ? db.prepare('SELECT m.*,p.name product_name,u.display_name user_name FROM inventory_movements m JOIN products p ON p.id=m.product_id JOIN users u ON u.id=m.user_id ORDER BY m.created_at DESC LIMIT 300').all()
+      : db.prepare('SELECT m.*,p.name product_name,u.display_name user_name FROM inventory_movements m JOIN products p ON p.id=m.product_id JOIN users u ON u.id=m.user_id WHERE m.user_id=? ORDER BY m.created_at DESC LIMIT 300').all(actor.id)) as any[];
+    return rows.map(r=>({id:r.id,productName:r.product_name,type:r.type,quantityDelta:r.quantity_delta,reason:r.reason,userName:r.user_name,createdAt:r.created_at}));
+  });
   ipcMain.handle('expense:create',(_e,v)=>{const u=admin();if(!v.title?.trim()||!(Number(v.amount)>0))throw new Error('بيانات المصروف غير صحيحة.');db.prepare('INSERT INTO expenses(title,amount,user_id,created_at) VALUES (?,?,?,?)').run(v.title.trim(),Number(v.amount),u.id,now());audit(db,u.id,'expense.created',v);});
-  ipcMain.handle('users:list',()=>{admin();return (db.prepare('SELECT id,username,display_name,role,active FROM users ORDER BY id').all() as any[]).map(r=>({...userDto(r),active:!!r.active}));});
+  ipcMain.handle('users:list',()=>{admin();return (db.prepare('SELECT id,username,display_name,role,active FROM users WHERE deleted_at IS NULL ORDER BY id').all() as any[]).map(r=>({...userDto(r),active:!!r.active}));});
   ipcMain.handle('users:create',(_e,v)=>{const u=admin();if(!v.username?.trim()||!v.displayName?.trim()||String(v.password||'').length<8)throw new Error('كلمة المرور 8 أحرف على الأقل.');const name=v.username.trim().toLowerCase();db.prepare('INSERT INTO users(username,display_name,password_hash,role,created_at) VALUES (?,?,?,?,?)').run(name,v.displayName.trim(),hashPassword(v.password),v.role==='admin'?'admin':'seller',now());audit(db,u.id,'user.created',{username:name,role:v.role});});
-  ipcMain.handle('users:active',(_e,id:number,active:boolean)=>{const u=admin();if(id===u.id&&!active)throw new Error('لا يمكن إيقاف حسابك الحالي.');db.prepare('UPDATE users SET active=? WHERE id=?').run(active?1:0,id);audit(db,u.id,'user.active-changed',{id,active});});
+  ipcMain.handle('users:update',(_e,id:number,v)=>{const actor=admin();const target=db.prepare('SELECT * FROM users WHERE id=? AND deleted_at IS NULL').get(id) as any;if(!target)throw new Error('المستخدم غير موجود.');const username=String(v.username||'').trim().toLowerCase(),displayName=String(v.displayName||'').trim(),password=String(v.password||'');if(!username||!displayName)throw new Error('اسم المستخدم والاسم الظاهر مطلوبان.');if(password&&password.length<8)throw new Error('كلمة المرور الجديدة يجب ألا تقل عن 8 أحرف.');const duplicate=db.prepare('SELECT id FROM users WHERE username=? AND id<>? AND deleted_at IS NULL').get(username,id);if(duplicate)throw new Error('اسم المستخدم مستخدم بالفعل.');const tx=db.transaction(()=>{if(password)db.prepare('UPDATE users SET username=?,display_name=?,password_hash=? WHERE id=?').run(username,displayName,hashPassword(password),id);else db.prepare('UPDATE users SET username=?,display_name=? WHERE id=?').run(username,displayName,id);audit(db,actor.id,'user.updated',{targetId:id,username,passwordChanged:!!password});});tx();if(session?.id===id)session={...session,username,displayName};return userDto(db.prepare('SELECT * FROM users WHERE id=?').get(id));});
+  ipcMain.handle('users:delete',(_e,id:number)=>{const actor=admin();const target=db.prepare('SELECT id,username,role FROM users WHERE id=? AND deleted_at IS NULL').get(id) as any;if(!target)throw new Error('المستخدم غير موجود.');if(target.role==='admin')throw new Error('لا يمكن حذف حساب الأدمن. يمكنك تعديل بياناته أو كلمة مروره فقط.');if(id===actor.id)throw new Error('لا يمكن حذف حسابك الحالي.');db.prepare('UPDATE users SET active=0,deleted_at=?,username=? WHERE id=?').run(now(),'deleted_'+id+'_'+target.username,id);audit(db,actor.id,'user.deleted',{targetId:id,username:target.username});});
+  ipcMain.handle('users:active',(_e,id:number,active:boolean)=>{const u=admin();const target=db.prepare('SELECT role,deleted_at FROM users WHERE id=?').get(id) as any;if(!target||target.deleted_at)throw new Error('المستخدم غير موجود.');if(target.role==='admin')throw new Error('لا يمكن تعطيل حساب الأدمن.');if(id===u.id&&!active)throw new Error('لا يمكن إيقاف حسابك الحالي.');db.prepare('UPDATE users SET active=? WHERE id=?').run(active?1:0,id);audit(db,u.id,'user.active-changed',{id,active});});
+  
   ipcMain.handle('print:invoice',async(_e,html:string,size:PaperSize)=>{
     login();const paper=size==='A4'?'A4':{width:size==='58mm'?58000:80000,height:250000};
     const p=new BrowserWindow({show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false}});
@@ -352,8 +510,9 @@ function register(){
     return new Promise(resolve=>p.webContents.print({silent:false,printBackground:true,pageSize:paper,margins:{marginType:size==='A4'?'default':'none'}},(ok,reason)=>{if(!p.isDestroyed())p.close();resolve({success:ok,message:reason|| (ok?'تم إرسال الفاتورة للطباعة.':'تعذرت الطباعة.')});}));
   });
 }
-app.whenReady().then(()=>{
+app.whenReady().then(async()=>{
   databasePath=path.join(app.getPath('userData'),'storeflow.sqlite');
+  await migrateLegacyDatabase(databasePath);
   db=openDatabase(databasePath);
   const adminCount=Number((db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin'").get() as any).n);
   if(!adminCount){
@@ -365,6 +524,10 @@ app.whenReady().then(()=>{
   const span=Math.max(1,s.backupIntervalHours||24)*3600000;
   if(!s.lastBackupAt||Date.now()-new Date(s.lastBackupAt).getTime()>=span)setTimeout(()=>backup().catch(console.error),7000);
   app.on('activate',()=>{if(BrowserWindow.getAllWindows().length===0)makeWindow();});
+}).catch(error=>{
+  console.error('Kasho startup failed:',error);
+  dialog.showErrorBox('تعذر تشغيل Kasho',error?.message||String(error));
+  app.quit();
 });
 app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit();});
 app.on('before-quit',()=>{if(backupTimer)clearInterval(backupTimer);if(db?.open)db.close();});
