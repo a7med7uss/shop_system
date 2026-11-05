@@ -116,3 +116,62 @@ export function audit(db: Database.Database, userId: number, action: string, det
   db.prepare('INSERT INTO audit_logs(user_id,action,details,created_at) VALUES (?,?,?,?)')
     .run(userId, action, JSON.stringify(details), new Date().toISOString());
 }
+
+const backupRequiredColumns: Record<string, string[]> = {
+  users: ['id', 'username', 'display_name', 'password_hash', 'role', 'active', 'created_at'],
+  settings: ['key', 'value'],
+  products: ['id', 'name', 'brand', 'model', 'category', 'generic_category', 'barcode', 'purchase_price', 'selling_price', 'stock_quantity', 'allow_discount', 'serial_tracking', 'low_stock_threshold', 'active', 'created_at', 'updated_at'],
+  product_tags: ['product_id', 'tag'],
+  sales: ['id', 'invoice_number', 'cashier_user_id', 'subtotal', 'discount_total', 'total', 'currency', 'currency_symbol', 'payment_method', 'customer_name', 'status', 'created_at'],
+  sale_items: ['id', 'sale_id', 'product_id', 'product_name', 'quantity', 'unit_purchase_cost', 'unit_selling_price', 'discount_amount', 'discount_level', 'serial_numbers'],
+  inventory_movements: ['id', 'product_id', 'type', 'quantity_delta', 'reason', 'user_id', 'created_at'],
+  expenses: ['id', 'title', 'amount', 'user_id', 'created_at'],
+  sale_returns: ['id', 'sale_item_id', 'quantity', 'refund_amount', 'reason', 'user_id', 'created_at'],
+  audit_logs: ['id', 'user_id', 'action', 'details', 'created_at']
+};
+
+/**
+ * Validate a SQLite backup before it is allowed to replace the live store database.
+ * returned_quantity is intentionally not required here: openDatabase adds it to
+ * older StoreFlow/Kasho databases during the normal schema migration.
+ */
+export function validateBackupDatabase(filePath: string): { valid: boolean; message: string } {
+  let candidate: Database.Database | null = null;
+  try {
+    candidate = new Database(filePath, { readonly: true, fileMustExist: true });
+
+    const integrity = candidate.pragma('quick_check') as Array<{ quick_check?: string }>;
+    if (!integrity.length || integrity.some(row => String(row.quick_check || '').toLowerCase() !== 'ok')) {
+      return { valid: false, message: 'ملف النسخة تالف أو فشل اختبار سلامة SQLite.' };
+    }
+
+    const tables = new Set(
+      (candidate.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>)
+        .map(row => row.name)
+    );
+
+    for (const [table, requiredColumns] of Object.entries(backupRequiredColumns)) {
+      if (!tables.has(table)) {
+        return { valid: false, message: 'النسخة لا تحتوي جدولاً أساسياً في كاشو: ' + table };
+      }
+      const columns = new Set(
+        (candidate.pragma(`table_info(${table})`) as Array<{ name: string }>).map(column => column.name)
+      );
+      const missing = requiredColumns.filter(column => !columns.has(column));
+      if (missing.length) {
+        return { valid: false, message: 'بنية جدول ' + table + ' غير مكتملة: ' + missing.join(', ') };
+      }
+    }
+
+    const foreignKeyErrors = candidate.pragma('foreign_key_check') as any[];
+    if (foreignKeyErrors.length) {
+      return { valid: false, message: 'النسخة تحتوي على سجلات مرتبطة بشكل غير سليم.' };
+    }
+
+    return { valid: true, message: '' };
+  } catch {
+    return { valid: false, message: 'تعذر فتح ملف النسخة. تأكد أنه ملف SQLite صالح وغير تالف.' };
+  } finally {
+    if (candidate?.open) candidate.close();
+  }
+}
