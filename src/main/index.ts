@@ -1,4 +1,4 @@
-import {app,BrowserWindow,ipcMain,dialog,shell,safeStorage,session} from 'electron';
+import {app,BrowserWindow,ipcMain,dialog,shell,safeStorage,session as electronSession} from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -102,11 +102,11 @@ function configureCameraPermissions(){
     const url=contents.getURL();
     return url.startsWith('file://')||url.startsWith('http://127.0.0.1:5173/');
   };
-  session.defaultSession.setPermissionCheckHandler((contents,permission,_origin,details)=>{
+  electronSession.defaultSession.setPermissionCheckHandler((contents,permission,_origin,details)=>{
     if(permission!=='media'||!isKashoWindow(contents))return false;
     return details?.mediaType==='video';
   });
-  session.defaultSession.setPermissionRequestHandler((contents,permission,callback,details)=>{
+  electronSession.defaultSession.setPermissionRequestHandler((contents,permission,callback,details)=>{
     const mediaTypes=details?.mediaTypes||[];
     const videoOnly=Array.isArray(mediaTypes)&&mediaTypes.includes('video')&&!mediaTypes.includes('audio');
     callback(permission==='media'&&isKashoWindow(contents)&&videoOnly);
