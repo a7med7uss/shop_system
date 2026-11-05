@@ -24,6 +24,10 @@ export interface Product {
   stockQuantity: number;
   allowDiscount: boolean;
   lowStockThreshold: number;
+  visualType: 'default' | 'icon' | 'color' | 'image';
+  iconKey: string;
+  visualColor: string;
+  imageData: string;
   tags: string[];
 }
 
@@ -39,6 +43,10 @@ export interface ProductInput {
   stockQuantity?: number;
   allowDiscount: boolean;
   lowStockThreshold: number;
+  visualType?: 'default' | 'icon' | 'color' | 'image';
+  iconKey?: string;
+  visualColor?: string;
+  imageData?: string;
   tags: string[];
 }
 
