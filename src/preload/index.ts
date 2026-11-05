@@ -18,6 +18,7 @@ const api:StoreFlowAPI = {
   saveSettings:(v)=>ipcRenderer.invoke('settings:save',v),
   chooseDirectory:()=>ipcRenderer.invoke('dialog:directory'),
   chooseImage:()=>ipcRenderer.invoke('dialog:image'),
+  chooseProductImage:()=>ipcRenderer.invoke('products:choose-image'),
   runBackup:()=>ipcRenderer.invoke('backup:run'),
   restoreBackup:()=>ipcRenderer.invoke('backup:restore'),
   listProducts:(q)=>ipcRenderer.invoke('products:list',q),
