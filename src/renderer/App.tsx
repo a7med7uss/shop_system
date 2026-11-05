@@ -63,7 +63,7 @@ export default function App(){
  const changeTheme=async()=>{const theme=settings.theme==='dark'?'light':'dark';try{const saved=await window.storeflow.setTheme(theme);setSettings(current=>({...current,theme:saved}));}catch(e:any){notify(e.message||String(e),true);}};
  const submitReturn=async(e:React.FormEvent)=>{e.preventDefault();if(!returnSaleDetails||!returnItemId)return notify(rtl?'اختر الفاتورة والمنتج أولاً.':'Select an invoice and product first.',true);const item=returnSaleDetails.items.find(x=>x.id===returnItemId);if(!item)return notify(rtl?'المنتج غير موجود في الفاتورة.':'The selected item is not in this invoice.',true);setBusy(true);try{const result=await window.storeflow.returnSaleItem({saleItemId:item.id,quantity:returnQuantity,reason:returnReason});const html=returnInvoiceHtml(returnSaleDetails,item,returnQuantity,result.refund,result.totalRefunded,result.netTotal,settings,returnReason);setShowReturns(false);setReturnReceipt({html,refund:result.refund,netTotal:result.netTotal,invoiceNumber:returnSaleDetails.invoiceNumber});setReturnSaleDetails(null);setReturnItemId(null);setReturnQuantity(1);await refresh();notify(rtl?'تم تسجيل المرتجع وإضافة الكمية للمخزون.':'Return recorded and stock updated.');}catch(error:any){notify(error.message||String(error),true);}finally{setBusy(false);}};
  const currency=(code:string)=>{const c=currencies.find(x=>x[0]===code)!;updateSettings({currency:c[0],currencySymbol:c[1]});};
- const movementLabel=(type:string)=>{const labels:any={sale:rtl?'بيع':'Sale',return:rtl?'استرجاع':'Return',opening:rtl?'رصيد افتتاحي':'Opening stock',restock:rtl?'إضافة مخزون':'Stock added',adjustment:rtl?'تسوية مخزون':'Stock adjustment'};return labels[type]||type;};
+ const movementLabel=(type:string)=>{const labels:any={sale:rtl?'بيع':'Sale',return:rtl?'استرجاع':'Return',opening:rtl?'إضافة مخزون':'Stock added',restock:rtl?'إضافة مخزون':'Stock added',adjustment:rtl?'تسوية مخزون':'Stock adjustment'};return labels[type]||type;};
  const addTag=()=>{if(!tagDraft.trim())return;const old=tagsText.split(/[,،\n]+/).map(x=>x.trim()).filter(Boolean);if(!old.includes(tagDraft.trim()))setTagsText([...old,tagDraft.trim()].join(', '));setTagDraft('');};
  const nav=[['dashboard',t.dashboard,LayoutDashboard,isAdmin],['pos',t.pos,ShoppingCart,!isAdmin],['products',t.products,Package,true],['stock',t.stock,Archive,true],['sales',t.sales,FileText,true],['users',t.users,Users,isAdmin],['settings',t.settings,Settings,isAdmin]].filter(x=>x[3]) as any[];
  if(loading)return <div className="loading"><WindowChrome/><img src="./kasho-logo.svg" alt="Kasho"/><b>Kasho</b><small className="a7-mark">A7</small></div>;
@@ -115,8 +115,8 @@ function ProductVisual({product}:{product:Product}){
  const option=PRODUCT_ICON_OPTIONS.find(item=>item[0]===product.iconKey);
  const Icon=option?.[2]||Box;
  if(product.visualType==='image'&&product.imageData)return <span className="product-icon product-visual"><img src={product.imageData} alt={product.name}/></span>;
- if(product.visualType==='icon')return <span className="product-icon product-visual"><Icon size={21}/></span>;
- if(product.visualType==='color')return <span className="product-icon product-visual"><Box size={21}/></span>;
+ if(product.visualType==='icon')return <span className="product-icon product-visual" style={{backgroundColor:product.visualColor||undefined,color:product.visualColor?'#fff':undefined}}><Icon size={21}/></span>;
+ if(product.visualType==='color')return <span className="product-icon product-visual" style={{backgroundColor:product.visualColor||undefined,color:'#fff'}}><Box size={21}/></span>;
  return <span className="product-icon product-visual"><img src="./kasho-logo.svg" alt="Kasho"/></span>;
 }
 
