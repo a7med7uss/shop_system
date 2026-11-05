@@ -559,3 +559,35 @@ body{zoom:1!important}
 #root{zoom:1!important}
 html{font-size:16px}
 .setup-card,.setup-wizard{zoom:1!important}
+
+/* Final onboarding layout: one focused, wide step at a time. */
+.setup-card-wide{width:min(900px,calc(100vw - 64px));min-height:440px;max-height:calc(100vh - 76px);justify-content:flex-start;padding:clamp(28px,4vw,54px)}
+.setup-card-wide .setup-stage{display:flex;flex:1;min-height:210px;flex-direction:column;justify-content:center;gap:22px;animation:setupStepEnter .48s cubic-bezier(.2,.8,.2,1) both}
+.setup-card-wide .setup-stage h1{font-size:clamp(25px,3vw,34px);margin:0}
+.setup-card-wide .setup-intro{font-size:14px;margin:0 0 8px}
+.setup-card-wide .field{width:100%;max-width:100%}
+.setup-card-wide .field select,.setup-card-wide .field input{height:56px;font-size:16px}
+.setup-progress{display:flex;align-items:center;justify-content:space-between;gap:18px;color:var(--muted);font-size:11px;font-weight:800}
+.setup-progress>div{display:flex;gap:7px;flex:1;max-width:360px}
+.setup-progress i{height:4px;flex:1;border-radius:8px;background:var(--line);transition:background .3s ease,transform .3s ease}
+.setup-progress i.done{background:var(--orange);transform:scaleY(1.5)}
+.setup-navigation{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:16px}
+.setup-navigation button{min-width:140px;min-height:48px}
+.setup-navigation .setup-back{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:12px;font-weight:700}
+.setup-font-preview{border:1px solid var(--line);background:var(--soft);border-radius:14px;padding:24px;font-weight:700;text-align:center;font-size:calc(20px * var(--kasho-font-scale,1))}
+.setup-store-fields{display:flex;flex-direction:column;gap:16px}
+.setup-store-fields .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.setup-welcome{background:#171412!important;color:#fff!important}
+.welcome-word{
+  color:#fff;font-family:Manrope,Arial,sans-serif;font-size:clamp(34px,7vw,82px);
+  font-weight:800;letter-spacing:.12em;text-align:center;white-space:nowrap;
+  opacity:0;transform:translateY(12px) scale(.985);
+  animation:welcomeWordReveal 1.15s cubic-bezier(.2,.75,.25,1) .12s forwards;
+}
+@keyframes setupStepEnter{from{opacity:0;transform:translateX(18px) translateY(8px);filter:blur(5px)}to{opacity:1;transform:translateX(0) translateY(0);filter:blur(0)}}
+@keyframes welcomeWordReveal{0%{opacity:0;transform:translateY(12px) scale(.985);letter-spacing:.2em;filter:blur(8px)}65%{opacity:1;filter:blur(0)}100%{opacity:1;transform:translateY(0) scale(1);letter-spacing:.12em;filter:blur(0)}}
+@media(max-width:700px){
+ .setup-card-wide{width:calc(100vw - 28px);min-height:420px;padding:24px}
+ .setup-store-fields .form-grid{grid-template-columns:1fr}
+ .welcome-word{white-space:normal;line-height:1.35;padding:0 18px}
+}
