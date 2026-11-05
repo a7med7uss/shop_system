@@ -130,6 +130,12 @@ function Modal({title,children,close}:{title:string;children:React.ReactNode;clo
 function Metric({label,value,icon:Icon}:any){return <div className="metric panel"><span><Icon size={18}/>{label}</span><strong>{value}</strong></div>;}
 function SummaryRow({label,value}:any){return <div className="summary-row"><span>{label}</span><b>{value}</b></div>;}
 
+function cleanErrorMessage(value:unknown){
+ let message=String(value??'').trim();
+ message=message.replace(/^Error invoking remote method '[^']+':\\s*/i,'').replace(/^Error:\\s*/i,'');
+ message=message.split('\\n')[0].trim();
+ return message||'حدث خطأ غير متوقع.';
+}
 function escapeHtml(value:unknown){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]!));}
 function returnInvoiceHtml(sale:SaleDetails,item:SaleDetails['items'][number],quantity:number,refund:number,totalRefunded:number,netTotal:number,settings:StoreSettings,reason:string){
  const ar=settings.language==='ar',locale=ar?'ar-EG':'en-US';
