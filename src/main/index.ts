@@ -102,7 +102,7 @@ function addProduct(input:ProductInput,userId:number){
   });
   return tx();
 }
-function saleDto(row:any){return {id:row.id,invoiceNumber:row.invoice_number,cashierName:row.cashier_name,subtotal:row.subtotal,discountTotal:row.discount_total,total:row.total,currency:row.currency,currencySymbol:row.currency_symbol,paymentMethod:row.payment_method,customerName:row.customer_name||'',status:row.status,createdAt:row.created_at};}
+function saleDto(row:any){return {id:row.id,invoiceNumber:row.invoice_number,cashierName:row.cashier_name,subtotal:row.subtotal,discountTotal:row.discount_total,total:row.total,totalRefunded:Number(row.total_refunded||0),currency:row.currency,currencySymbol:row.currency_symbol,paymentMethod:row.payment_method,customerName:row.customer_name||'',status:row.status,createdAt:row.created_at};}
 async function readRememberedLogin(){
   try{
     if(!fs.existsSync(rememberFile())||!(await safeStorage.isAsyncEncryptionAvailable()))return null;
@@ -264,6 +264,17 @@ function register(){
       tagsFor(id,v.tags||[]);audit(db,u.id,'product.updated',{id});
     });tx();return productDto(db.prepare('SELECT * FROM products WHERE id=?').get(id));
   });
+  ipcMain.handle('products:delete',(_e,id:number)=>{
+    const u=admin();
+    const product=db.prepare('SELECT id,name,active FROM products WHERE id=?').get(id) as any;
+    if(!product||!product.active)throw new Error('المنتج غير موجود أو تم حذفه بالفعل.');
+    const tx=db.transaction(()=>{
+      db.prepare('UPDATE products SET active=0,updated_at=? WHERE id=?').run(now(),id);
+      audit(db,u.id,'product.archived',{id,name:product.name});
+    });
+    tx();
+    return {success:true};
+  });
   ipcMain.handle('stock:adjust',(_e,v)=>{
     const u=admin();const p=db.prepare('SELECT * FROM products WHERE id=? AND active=1').get(v.productId) as any;
     if(!p)throw new Error('المنتج غير موجود.');
@@ -345,15 +356,18 @@ function register(){
       audit(db,u.id,'sale.completed',{id,invoice,total,discountTotal});
     });
     tx();
-    const row=db.prepare('SELECT s.*,u.display_name cashier_name FROM sales s JOIN users u ON u.id=s.cashier_user_id WHERE s.id=?').get(id) as any;
+    const row=db.prepare('SELECT s.*,u.display_name cashier_name,COALESCE((SELECT SUM(r.refund_amount) FROM sale_returns r JOIN sale_items si ON si.id=r.sale_item_id WHERE si.sale_id=s.id),0) total_refunded FROM sales s JOIN users u ON u.id=s.cashier_user_id WHERE s.id=?').get(id) as any;
     return saleDto(row);
   });
 
   ipcMain.handle('sales:list',()=>{
     const u=login();
+    const saleQuery=`SELECT s.*,u.display_name cashier_name,
+      COALESCE((SELECT SUM(r.refund_amount) FROM sale_returns r JOIN sale_items si ON si.id=r.sale_item_id WHERE si.sale_id=s.id),0) total_refunded
+      FROM sales s JOIN users u ON u.id=s.cashier_user_id`;
     const rows=(u.role==='admin'
-      ? db.prepare('SELECT s.*,u.display_name cashier_name FROM sales s JOIN users u ON u.id=s.cashier_user_id ORDER BY s.created_at DESC LIMIT 500').all()
-      : db.prepare('SELECT s.*,u.display_name cashier_name FROM sales s JOIN users u ON u.id=s.cashier_user_id WHERE s.cashier_user_id=? ORDER BY s.created_at DESC LIMIT 500').all(u.id)) as any[];
+      ? db.prepare(saleQuery+' ORDER BY s.created_at DESC LIMIT 500').all()
+      : db.prepare(saleQuery+' WHERE s.cashier_user_id=? ORDER BY s.created_at DESC LIMIT 500').all(u.id)) as any[];
     return rows.map(saleDto);
   });
 
@@ -364,7 +378,6 @@ function register(){
     const items=db.prepare('SELECT * FROM sale_items WHERE sale_id=? ORDER BY id').all(id) as any[];
     return {
       ...saleDto(row),
-      totalRefunded:Number((db.prepare('SELECT COALESCE(SUM(refund_amount),0) amount FROM sale_returns WHERE sale_item_id IN (SELECT id FROM sale_items WHERE sale_id=?)').get(id) as any).amount||0),
       items:items.map(item=>({
         id:item.id,
         productId:item.product_id,
@@ -381,7 +394,7 @@ function register(){
 
   ipcMain.handle('sales:return-item',(_e,input)=>{
     const u=login();
-    const item=db.prepare('SELECT si.*,s.status sale_status,s.id sale_id,s.cashier_user_id,s.total sale_total FROM sale_items si JOIN sales s ON s.id=si.sale_id WHERE si.id=?').get(input.saleItemId) as any;
+    const item=db.prepare('SELECT si.*,s.status sale_status,s.id sale_id,s.cashier_user_id,s.subtotal sale_subtotal,s.discount_total sale_discount_total FROM sale_items si JOIN sales s ON s.id=si.sale_id WHERE si.id=?').get(input.saleItemId) as any;
     if(!item||(u.role!=='admin'&&item.cashier_user_id!==u.id))throw new Error('لا تملك صلاحية إرجاع هذا العنصر.');
     if(item.sale_status==='void'||item.sale_status==='refunded')throw new Error('لا يمكن إرجاع هذا العنصر.');
     const quantity=Number(input.quantity);
@@ -397,13 +410,16 @@ function register(){
       db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)')
         .run(item.product_id,'return',quantity,'مرتجع فاتورة',u.id,now());
       const counts=db.prepare('SELECT COALESCE(SUM(quantity),0) total,COALESCE(SUM(returned_quantity),0) returned FROM sale_items WHERE sale_id=?').get(item.sale_id) as any;
+      const refunded=Number((db.prepare('SELECT COALESCE(SUM(r.refund_amount),0) amount FROM sale_returns r JOIN sale_items si ON si.id=r.sale_item_id WHERE si.sale_id=?').get(item.sale_id) as any).amount||0);
+      const originalTotal=Math.max(0,Number(item.sale_subtotal)-Number(item.sale_discount_total));
+      const netTotal=Math.max(0,Math.round((originalTotal-refunded)*100)/100);
       const status=counts.returned>=counts.total?'refunded':'partially_refunded';
-      db.prepare('UPDATE sales SET status=? WHERE id=?').run(status,item.sale_id);
+      db.prepare('UPDATE sales SET status=?,total=? WHERE id=?').run(status,netTotal,item.sale_id);
       audit(db,u.id,'sale.item-returned',{saleId:item.sale_id,saleItemId:item.id,quantity,refund});
     });
     transaction();
     const totalRefunded=Number((db.prepare('SELECT COALESCE(SUM(r.refund_amount),0) amount FROM sale_returns r JOIN sale_items si ON si.id=r.sale_item_id WHERE si.sale_id=?').get(item.sale_id) as any).amount||0);
-    return {success:true,refund,totalRefunded,netTotal:Math.max(0,Number(item.sale_total)-totalRefunded)};
+    return {success:true,refund,totalRefunded,netTotal:Math.max(0,Math.round((Number(item.sale_subtotal)-Number(item.sale_discount_total)-totalRefunded)*100)/100)};
   });
 
   ipcMain.handle('sales:void',(_e,saleId:string,reason:string)=>{
