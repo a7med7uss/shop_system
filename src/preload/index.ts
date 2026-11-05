@@ -16,6 +16,7 @@ const api:StoreFlowAPI = {
   getSettings:()=>ipcRenderer.invoke('settings:get'),
   setTheme:(theme)=>ipcRenderer.invoke('settings:theme',theme),
   saveSettings:(v)=>ipcRenderer.invoke('settings:save',v),
+  saveInitialSettings:(v)=>ipcRenderer.invoke('settings:setup',v),
   chooseDirectory:()=>ipcRenderer.invoke('dialog:directory'),
   chooseImage:()=>ipcRenderer.invoke('dialog:image'),
   chooseProductImage:()=>ipcRenderer.invoke('products:choose-image'),
@@ -38,6 +39,8 @@ const api:StoreFlowAPI = {
   createExpense:(v)=>ipcRenderer.invoke('expense:create',v),
   listUsers:()=>ipcRenderer.invoke('users:list'),
   createUser:(v)=>ipcRenderer.invoke('users:create',v),
+  updateUser:(id,v)=>ipcRenderer.invoke('users:update',id,v),
+  deleteUser:(id)=>ipcRenderer.invoke('users:delete',id),
   setUserActive:(id,active)=>ipcRenderer.invoke('users:active',id,active),
   printInvoice:(html,size)=>ipcRenderer.invoke('print:invoice',html,size)
 };
