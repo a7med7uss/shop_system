@@ -20,5 +20,7 @@ jobs:
         run: npm run typecheck
       - name: Build bundles
         run: npm run build
+      - name: Package Windows installer (NSIS smoke test)
+        run: npx electron-builder --win nsis --x64 --publish never
       - name: Database initialization smoke test
         run: npm run test:database
