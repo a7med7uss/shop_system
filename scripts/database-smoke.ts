@@ -75,6 +75,9 @@ async function run() {
     const netSale=db.prepare('SELECT total FROM sales WHERE id=?').get(saleId) as {total:number};
     if(netSale.total!==54)throw new Error('A partial return did not reduce the invoice total.');
     db.prepare('UPDATE products SET active=0 WHERE id=?').run(productId);
+    db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)').run(productId,'deleted',0,'حذف المنتج من المخزون',userId,createdAt);
+    const deletionMovement=db.prepare("SELECT COUNT(*) n FROM inventory_movements WHERE product_id=? AND type='deleted'").get(productId) as {n:number};
+    if(deletionMovement.n!==1)throw new Error('Product archive was not recorded in the inventory activity log.');
     const historicalItem=db.prepare('SELECT COUNT(*) n FROM sale_items WHERE sale_id=? AND product_id=?').get(saleId,productId) as {n:number};
     if(historicalItem.n!==1)throw new Error('Archiving a product removed its historical invoice line.');
 
