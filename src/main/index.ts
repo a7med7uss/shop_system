@@ -251,7 +251,13 @@ function register(){
   });
   ipcMain.handle('products:create',(_e,v:ProductInput)=>{const u=admin();return productDto(db.prepare('SELECT * FROM products WHERE id=?').get(addProduct(v,u.id)));});
   ipcMain.handle('products:update',(_e,id:number,v:ProductInput)=>{
-    const u=admin();const p=db.prepare('SELECT * FROM products WHERE id=?').get(id) as any;if(!p)throw new Error('المنتج غير موجود.');
+    const u=admin();
+    if(!['default','icon','color','image'].includes(v.visualType||'default'))throw new Error('نوع مظهر المنتج غير صالح.');
+    if(v.visualColor&&!/^#[0-9a-fA-F]{6}$/.test(v.visualColor))throw new Error('لون المنتج غير صالح.');
+    if(v.imageData&&(!/^data:image\/(png|jpeg|webp);base64,/.test(v.imageData)||v.imageData.length>2.1*1024*1024))throw new Error('صورة المنتج غير صالحة أو أكبر من الحد المسموح.');
+    if(v.visualType==='image'&&!v.imageData)throw new Error('اختر صورة المنتج أولاً.');
+    if(v.visualType==='icon'&&!v.iconKey)throw new Error('اختر أيقونة المنتج أولاً.');
+    const p=db.prepare('SELECT * FROM products WHERE id=?').get(id) as any;if(!p)throw new Error('المنتج غير موجود.');
     const tx=db.transaction(()=>{
       db.prepare('UPDATE products SET name=?,brand=?,model=?,category=?,generic_category=?,barcode=?,purchase_price=?,selling_price=?,allow_discount=?,low_stock_threshold=?,visual_type=?,icon_key=?,visual_color=?,image_data=?,updated_at=? WHERE id=?')
         .run(v.name.trim(),v.brand||'',v.model||'',v.category||'',v.genericCategory||'',v.barcode?.trim()||null,v.purchasePrice,v.sellingPrice,v.allowDiscount?1:0,v.lowStockThreshold||5,v.visualType||'default',v.iconKey||'',v.visualColor||'',v.imageData||'',now(),id);
