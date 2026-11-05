@@ -92,10 +92,26 @@ async function run() {
       throw new Error('Backup restore did not preserve product and inventory data.');
     }
     const restoredMovements = restored.prepare('SELECT type,quantity_delta,reason,user_id FROM inventory_movements WHERE product_id=? ORDER BY id').all(productId) as Array<{type:string;quantity_delta:number;reason:string;user_id:number}>;
-    const restoredOpening = restoredMovements.find(m => m.type === 'opening' && m.quantity_delta === 7);
-    const restoredDeletion = restoredMovements.find(m => m.type === 'deleted' && m.quantity_delta === 0 && m.reason === 'حذف المنتج من المخزون' && m.user_id === userId);
+    // openDatabase intentionally normalizes legacy "opening" movements to "restock"
+    // and standardizes their reason during schema migration. Verify the persisted,
+    // post-migration representation rather than the pre-migration label.
+    const restoredOpening = restoredMovements.find(m =>
+      m.type === 'restock' &&
+      m.quantity_delta === 7 &&
+      m.reason === 'إضافة مخزون عند إنشاء المنتج' &&
+      m.user_id === userId
+    );
+    const restoredDeletion = restoredMovements.find(m =>
+      m.type === 'deleted' &&
+      m.quantity_delta === 0 &&
+      m.reason === 'حذف المنتج من المخزون' &&
+      m.user_id === userId
+    );
     if (restoredMovements.length !== 2 || !restoredOpening || !restoredDeletion) {
-      throw new Error('Backup restore did not preserve both stock opening and product deletion history.');
+      throw new Error(
+        'Backup restore did not preserve expected inventory history: ' +
+        JSON.stringify(restoredMovements)
+      );
     }
 
     partial = new Database(partialFile);
