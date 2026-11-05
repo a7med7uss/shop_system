@@ -269,7 +269,10 @@ function register(){
     const product=db.prepare('SELECT id,name,active FROM products WHERE id=?').get(id) as any;
     if(!product||!product.active)throw new Error('المنتج غير موجود أو تم حذفه بالفعل.');
     const tx=db.transaction(()=>{
-      db.prepare('UPDATE products SET active=0,updated_at=? WHERE id=?').run(now(),id);
+      const stamp=now();
+      db.prepare('UPDATE products SET active=0,updated_at=? WHERE id=?').run(stamp,id);
+      db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)')
+        .run(id,'deleted',0,'حذف المنتج من المخزون',u.id,stamp);
       audit(db,u.id,'product.archived',{id,name:product.name});
     });
     tx();
