@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {Activity,Archive,BarChart3,Bell,Box,Check,ChevronLeft,Database,Download,FileText,Home,Languages,LayoutDashboard,LogOut,Lock,Maximize2,Package,Plus,Printer,QrCode,RefreshCw,ScanLine,Search,Settings,ShoppingBag,ShoppingCart,SlidersHorizontal,Sun,Tag,TrendingUp,Users,Wallet,X} from 'lucide-react';
+import {Activity,Archive,BarChart3,Bell,Box,Check,ChevronLeft,Database,Download,FileText,Home,Languages,LayoutDashboard,LogOut,Lock,Maximize2,Eye,EyeOff,Package,Plus,Printer,QrCode,RefreshCw,ScanLine,Search,Settings,ShoppingBag,ShoppingCart,SlidersHorizontal,Sun,Tag,TrendingUp,Users,Wallet,X} from 'lucide-react';
 import type {Dashboard,DiscountLevel,Language,Product,ProductInput,Sale,SaleDetails,StoreSettings,User} from '../shared/types';
 
 const base:StoreSettings={storeName:'متجري',storeDescription:'',storeAddress:'',storePhone:'',storeLogoPath:'',language:'ar',currency:'EGP',currencySymbol:'ج.م',theme:'system',fontScale:1,paperSize:'A4',discountEnabled:true,highDiscountPercent:15,monsterDiscountPercent:30,backupPaths:['','',''],backupIntervalHours:24,lastBackupAt:''};
