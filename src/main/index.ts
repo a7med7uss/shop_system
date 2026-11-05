@@ -328,17 +328,21 @@ function register(){
   });
 
   ipcMain.handle('sales:list',()=>{
-    login();
-    return (db.prepare('SELECT s.*,u.display_name cashier_name FROM sales s JOIN users u ON u.id=s.cashier_user_id ORDER BY s.created_at DESC LIMIT 500').all() as any[]).map(saleDto);
+    const u=login();
+    const rows=(u.role==='admin'
+      ? db.prepare('SELECT s.*,u.display_name cashier_name FROM sales s JOIN users u ON u.id=s.cashier_user_id ORDER BY s.created_at DESC LIMIT 500').all()
+      : db.prepare('SELECT s.*,u.display_name cashier_name FROM sales s JOIN users u ON u.id=s.cashier_user_id WHERE s.cashier_user_id=? ORDER BY s.created_at DESC LIMIT 500').all(u.id)) as any[];
+    return rows.map(saleDto);
   });
 
   ipcMain.handle('sales:get',(_e,id:string)=>{
-    login();
+    const actor=login();
     const row=db.prepare('SELECT s.*,u.display_name cashier_name FROM sales s JOIN users u ON u.id=s.cashier_user_id WHERE s.id=?').get(id) as any;
-    if(!row)throw new Error('الفاتورة غير موجودة.');
+    if(!row||(actor.role!=='admin'&&row.cashier_user_id!==actor.id))throw new Error('الفاتورة غير موجودة أو لا تملك صلاحية عرضها.');
     const items=db.prepare('SELECT * FROM sale_items WHERE sale_id=? ORDER BY id').all(id) as any[];
     return {
       ...saleDto(row),
+      totalRefunded:Number((db.prepare('SELECT COALESCE(SUM(refund_amount),0) amount FROM sale_returns WHERE sale_item_id IN (SELECT id FROM sale_items WHERE sale_id=?)').get(id) as any).amount||0),
       items:items.map(item=>({
         id:item.id,
         productId:item.product_id,
@@ -354,9 +358,10 @@ function register(){
   });
 
   ipcMain.handle('sales:return-item',(_e,input)=>{
-    const u=admin();
-    const item=db.prepare('SELECT si.*,s.status sale_status,s.id sale_id FROM sale_items si JOIN sales s ON s.id=si.sale_id WHERE si.id=?').get(input.saleItemId) as any;
-    if(!item||item.sale_status==='void'||item.sale_status==='refunded')throw new Error('لا يمكن إرجاع هذا العنصر.');
+    const u=login();
+    const item=db.prepare('SELECT si.*,s.status sale_status,s.id sale_id,s.cashier_user_id,s.total sale_total FROM sale_items si JOIN sales s ON s.id=si.sale_id WHERE si.id=?').get(input.saleItemId) as any;
+    if(!item||(u.role!=='admin'&&item.cashier_user_id!==u.id))throw new Error('لا تملك صلاحية إرجاع هذا العنصر.');
+    if(item.sale_status==='void'||item.sale_status==='refunded')throw new Error('لا يمكن إرجاع هذا العنصر.');
     const quantity=Number(input.quantity);
     const remaining=item.quantity-(item.returned_quantity||0);
     if(!Number.isInteger(quantity)||quantity<1||quantity>remaining)throw new Error('كمية المرتجع غير صحيحة.');
@@ -375,7 +380,8 @@ function register(){
       audit(db,u.id,'sale.item-returned',{saleId:item.sale_id,saleItemId:item.id,quantity,refund});
     });
     transaction();
-    return {success:true,refund};
+    const totalRefunded=Number((db.prepare('SELECT COALESCE(SUM(r.refund_amount),0) amount FROM sale_returns r JOIN sale_items si ON si.id=r.sale_item_id WHERE si.sale_id=?').get(item.sale_id) as any).amount||0);
+    return {success:true,refund,totalRefunded,netTotal:Math.max(0,Number(item.sale_total)-totalRefunded)};
   });
 
   ipcMain.handle('sales:void',(_e,saleId:string,reason:string)=>{
@@ -398,7 +404,13 @@ function register(){
     transaction();
   });
 
-  ipcMain.handle('stock:movements',()=>{login();return (db.prepare('SELECT m.*,p.name product_name,u.display_name user_name FROM inventory_movements m JOIN products p ON p.id=m.product_id JOIN users u ON u.id=m.user_id ORDER BY m.created_at DESC LIMIT 300').all() as any[]).map(r=>({id:r.id,productName:r.product_name,type:r.type,quantityDelta:r.quantity_delta,reason:r.reason,userName:r.user_name,createdAt:r.created_at}));});
+  ipcMain.handle('stock:movements',()=>{
+    const actor=login();
+    const rows=(actor.role==='admin'
+      ? db.prepare('SELECT m.*,p.name product_name,u.display_name user_name FROM inventory_movements m JOIN products p ON p.id=m.product_id JOIN users u ON u.id=m.user_id ORDER BY m.created_at DESC LIMIT 300').all()
+      : db.prepare('SELECT m.*,p.name product_name,u.display_name user_name FROM inventory_movements m JOIN products p ON p.id=m.product_id JOIN users u ON u.id=m.user_id WHERE m.user_id=? ORDER BY m.created_at DESC LIMIT 300').all(actor.id)) as any[];
+    return rows.map(r=>({id:r.id,productName:r.product_name,type:r.type,quantityDelta:r.quantity_delta,reason:r.reason,userName:r.user_name,createdAt:r.created_at}));
+  });
   ipcMain.handle('expense:create',(_e,v)=>{const u=admin();if(!v.title?.trim()||!(Number(v.amount)>0))throw new Error('بيانات المصروف غير صحيحة.');db.prepare('INSERT INTO expenses(title,amount,user_id,created_at) VALUES (?,?,?,?)').run(v.title.trim(),Number(v.amount),u.id,now());audit(db,u.id,'expense.created',v);});
   ipcMain.handle('users:list',()=>{admin();return (db.prepare('SELECT id,username,display_name,role,active FROM users ORDER BY id').all() as any[]).map(r=>({...userDto(r),active:!!r.active}));});
   ipcMain.handle('users:create',(_e,v)=>{const u=admin();if(!v.username?.trim()||!v.displayName?.trim()||String(v.password||'').length<8)throw new Error('كلمة المرور 8 أحرف على الأقل.');const name=v.username.trim().toLowerCase();db.prepare('INSERT INTO users(username,display_name,password_hash,role,created_at) VALUES (?,?,?,?,?)').run(name,v.displayName.trim(),hashPassword(v.password),v.role==='admin'?'admin':'seller',now());audit(db,u.id,'user.created',{username:name,role:v.role});});
