@@ -51,6 +51,9 @@ export function openDatabase(filePath: string) {
     "CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id), action TEXT NOT NULL, details TEXT NOT NULL, created_at TEXT NOT NULL)"
   ].join(';\n'));
 
+  const userColumns = db.pragma('table_info(users)') as Array<{ name: string }>;
+  if (!userColumns.some(column => column.name === 'deleted_at')) db.exec('ALTER TABLE users ADD COLUMN deleted_at TEXT');
+
   const productColumns = db.pragma('table_info(products)') as Array<{ name: string }>;
   const productColumnNames = new Set(productColumns.map(column => column.name));
   if (!productColumnNames.has('visual_type')) db.exec("ALTER TABLE products ADD COLUMN visual_type TEXT NOT NULL DEFAULT 'default'");
