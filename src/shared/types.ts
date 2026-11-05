@@ -150,7 +150,7 @@ export interface StoreFlowAPI {
   quoteSale: (input:{items:CartLine[]}) => Promise<{subtotal:number;discountTotal:number;total:number}>;
   createSale: (input:{items:CartLine[];paymentMethod:string;customerName?:string}) => Promise<Sale>;
   getSale: (id:string) => Promise<SaleDetails>;
-  returnSaleItem: (input:{saleItemId:number;quantity:number;reason:string;}) => Promise<void>;
+  returnSaleItem: (input:{saleItemId:number;quantity:number;reason:string;}) => Promise<{success:boolean;refund:number;totalRefunded:number;netTotal:number}>;
   voidSale: (saleId:string,reason:string) => Promise<void>;
   listSales: () => Promise<Sale[]>;
   getMovements: () => Promise<Movement[]>;
