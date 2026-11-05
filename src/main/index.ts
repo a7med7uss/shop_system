@@ -33,18 +33,18 @@ async function migrateLegacyDatabase(targetPath:string) {
     throw new Error('تم العثور على أكثر من قاعدة بيانات قديمة. لم يتم إنشاء قاعدة جديدة أو استبدال أي بيانات. انقل قاعدة البيانات الصحيحة إلى مجلد بيانات Kasho ثم أعد التشغيل.');
   }
   const source=candidates[0];
-  const legacy=new Database(source,{readonly:true,fileMustExist:true});
   try {
-    const integrity=legacy.pragma('integrity_check',{simple:true});
-    const hasUsers=!!legacy.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").get();
-    if(integrity!=='ok'||!hasUsers) {
-      throw new Error('قاعدة البيانات القديمة موجودة لكنها غير سليمة أو لا تحتوي على بيانات Kasho المتوقعة. لم يتم استبدالها.');
+    const legacy=new Database(source,{readonly:true,fileMustExist:true});
+    try {
+      const integrity=legacy.pragma('integrity_check',{simple:true});
+      const hasUsers=!!legacy.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").get();
+      if(integrity!=='ok'||!hasUsers) {
+        throw new Error('قاعدة البيانات القديمة موجودة لكنها غير سليمة أو لا تحتوي على بيانات Kasho المتوقعة. لم يتم استبدالها.');
+      }
+      await legacy.backup(targetPath);
+    } finally {
+      legacy.close();
     }
-    await legacy.backup(targetPath);
-  } finally {
-    legacy.close();
-  }
-  try {
     const migrated=new Database(targetPath,{readonly:true,fileMustExist:true});
     try {
       const integrity=migrated.pragma('integrity_check',{simple:true});
