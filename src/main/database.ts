@@ -19,6 +19,7 @@ export const defaults: StoreSettings = {
   discountEnabled: true,
   highDiscountPercent: 15,
   monsterDiscountPercent: 30,
+  confirmSaleEnabled: false,
   backupPaths: ['', '', ''],
   backupIntervalHours: 24,
   lastBackupAt: ''
