@@ -180,6 +180,7 @@ function register(){
   ipcMain.handle('auth:remember:set',async(_e,value)=>writeRememberedLogin(value));
   ipcMain.handle('window:toggle-fullscreen',()=>{if(!win||win.isDestroyed())return false;const next=!win.isFullScreen();win.setFullScreen(next);return next;});
   ipcMain.handle('settings:get',()=>{login();return getSettings(db);});
+  ipcMain.handle('settings:theme',(_e,theme)=>{const u=login();if(!['system','light','dark'].includes(theme))throw new Error('الثيم غير صالح.');db.prepare('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('theme',JSON.stringify(theme));audit(db,u.id,'settings.theme-changed',{theme});return theme;});
   ipcMain.handle('settings:save',(_e,v:StoreSettings)=>{
     const u=admin();if(!Array.isArray(v.backupPaths)||v.backupPaths.length>3)throw new Error('ثلاثة مسارات نسخ احتياطي كحد أقصى.');
     const s={...getSettings(db),...v};
