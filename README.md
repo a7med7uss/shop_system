@@ -52,7 +52,13 @@ The product search's QR icon focuses the search field for a scanner input. It do
 
 There is no background Windows service or scheduled task. Backups run while Kasho is open and missed intervals are checked again at startup.
 
-**Security status:** remembered login credentials are encrypted using Windows' OS-backed storage. The application database and current SQLite backup files are not yet encrypted at rest in this first Kasho rebrand build. Do not treat a copied backup as protected against someone who can read the file. Portable, password-protected backup encryption and database-at-rest protection are a separate security phase.
+## Application integrity
+
+The hardened package enables Electron ASAR integrity validation and restricts loading the app from the verified archive. It also disables unused Node execution, Node options, and inspector entry points. These controls make casual modification and side-loading harder, but they are not an absolute anti-copy or anti-tamper guarantee. A person with local administrator access can still patch the Electron executable itself. Windows code signing is a separate publisher-identity layer and is not included in the free build.
+
+## Data encryption status
+
+Remembered login credentials use Windows DPAPI through Electron safeStorage. The application database and SQLite backup files are **not yet encrypted at rest** in this release. Do not treat a copied database or backup as protected from someone who can read the file. Database encryption and portable encrypted backups require a separate migration and recovery-key workflow; they are intentionally not enabled until the restore/migration tests are complete.
 
 ## Windows support
 

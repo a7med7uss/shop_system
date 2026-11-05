@@ -1,6 +1,6 @@
 {
   "name": "storeflow",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Kasho — Scan. Sell. Done. Local-first retail management system",
   "author": "Ahmed Hussein Emara",
@@ -90,6 +90,15 @@
         "from": "build/icon.ico",
         "to": "icon.ico"
       }
-    ]
+    ],
+    "asar": true,
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
+    }
   }
 }
