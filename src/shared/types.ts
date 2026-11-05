@@ -136,6 +136,7 @@ export interface StoreFlowAPI {
   toggleMaximizeWindow: () => Promise<boolean>;
   closeWindow: () => Promise<void>;
   getSettings: () => Promise<StoreSettings>;
+  setTheme: (theme:Theme) => Promise<Theme>;
   saveSettings: (settings:StoreSettings) => Promise<StoreSettings>;
   chooseDirectory: () => Promise<string|null>;
   chooseImage: () => Promise<string|null>;
