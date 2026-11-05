@@ -14,6 +14,7 @@ const api:StoreFlowAPI = {
   toggleMaximizeWindow:()=>ipcRenderer.invoke('window:toggle-maximize'),
   closeWindow:()=>ipcRenderer.invoke('window:close'),
   getSettings:()=>ipcRenderer.invoke('settings:get'),
+  setTheme:(theme)=>ipcRenderer.invoke('settings:theme',theme),
   saveSettings:(v)=>ipcRenderer.invoke('settings:save',v),
   chooseDirectory:()=>ipcRenderer.invoke('dialog:directory'),
   chooseImage:()=>ipcRenderer.invoke('dialog:image'),
