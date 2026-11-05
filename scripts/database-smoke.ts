@@ -37,6 +37,7 @@ async function run() {
       throw new Error('Unexpected first-run defaults.');
     }
     if (settings.backupPaths.length !== 3) throw new Error('Expected exactly three backup destinations.');
+    if (settings.confirmSaleEnabled !== false) throw new Error('Sale confirmation must be disabled by default.');
 
     const password = 'KashoSmoke#2026';
     const stored = hashPassword(password);
@@ -56,6 +57,26 @@ async function run() {
     db.prepare(
       'INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)'
     ).run(productId, 'opening', 7, 'Smoke test', userId, createdAt);
+
+    const saleId='smoke-sale-'+stamp;
+    const saleItemId=Number(db.prepare(
+      'INSERT INTO sales(id,invoice_number,cashier_user_id,subtotal,discount_total,total,currency,currency_symbol,payment_method,customer_name,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+    ).run(saleId,'SMOKE-'+stamp,userId,90,0,90,'EGP','ج.م','cash','','completed',createdAt).lastInsertRowid);
+    const itemId=Number(db.prepare(
+      'INSERT INTO sale_items(sale_id,product_id,product_name,quantity,returned_quantity,unit_purchase_cost,unit_selling_price,discount_amount,discount_level,serial_numbers) VALUES (?,?,?,?,?,?,?,?,?,?)'
+    ).run(saleId,productId,'Kasho smoke product',3,0,5,30,0,null,'[]').lastInsertRowid);
+    const refundAmount=30;
+    db.prepare('UPDATE sale_items SET returned_quantity=returned_quantity+1 WHERE id=?').run(itemId);
+    db.prepare('INSERT INTO sale_returns(sale_item_id,quantity,refund_amount,reason,user_id,created_at) VALUES (?,?,?,?,?,?)')
+      .run(itemId,1,refundAmount,'Smoke return',userId,createdAt);
+    const refunded=Number((db.prepare('SELECT COALESCE(SUM(refund_amount),0) amount FROM sale_returns r JOIN sale_items si ON si.id=r.sale_item_id WHERE si.sale_id=?').get(saleId) as {amount:number}).amount);
+    const netTotal=Math.max(0,90-refunded);
+    db.prepare('UPDATE sales SET total=? WHERE id=?').run(netTotal,saleId);
+    const netSale=db.prepare('SELECT total FROM sales WHERE id=?').get(saleId) as {total:number};
+    if(netSale.total!==60)throw new Error('A partial return did not reduce the invoice total.');
+    db.prepare('UPDATE products SET active=0 WHERE id=?').run(productId);
+    const historicalItem=db.prepare('SELECT COUNT(*) n FROM sale_items WHERE sale_id=? AND product_id=?').get(saleId,productId) as {n:number};
+    if(historicalItem.n!==1)throw new Error('Archiving a product removed its historical invoice line.');
 
     await db.backup(backupFile);
     const backupCheck = validateBackupDatabase(backupFile);
