@@ -148,6 +148,7 @@ export interface StoreFlowAPI {
   saveSettings: (settings:StoreSettings) => Promise<StoreSettings>;
   chooseDirectory: () => Promise<string|null>;
   chooseImage: () => Promise<string|null>;
+  chooseProductImage: () => Promise<string|null>;
   runBackup: () => Promise<any>;
   restoreBackup: () => Promise<{success:boolean;message:string}>;
   listProducts: (query?:string) => Promise<Product[]>;
