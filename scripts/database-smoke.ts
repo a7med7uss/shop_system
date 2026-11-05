@@ -91,8 +91,12 @@ async function run() {
     if (!restoredProduct || restoredProduct.name !== 'Kasho smoke product' || restoredProduct.stock_quantity !== 7) {
       throw new Error('Backup restore did not preserve product and inventory data.');
     }
-    const restoredMovement = restored.prepare('SELECT COUNT(*) n FROM inventory_movements WHERE product_id=?').get(productId) as {n:number};
-    if (restoredMovement.n !== 1) throw new Error('Backup restore did not preserve inventory history.');
+    const restoredMovements = restored.prepare('SELECT type,quantity_delta,reason,user_id FROM inventory_movements WHERE product_id=? ORDER BY id').all(productId) as Array<{type:string;quantity_delta:number;reason:string;user_id:number}>;
+    const restoredOpening = restoredMovements.find(m => m.type === 'opening' && m.quantity_delta === 7);
+    const restoredDeletion = restoredMovements.find(m => m.type === 'deleted' && m.quantity_delta === 0 && m.reason === 'حذف المنتج من المخزون' && m.user_id === userId);
+    if (restoredMovements.length !== 2 || !restoredOpening || !restoredDeletion) {
+      throw new Error('Backup restore did not preserve both stock opening and product deletion history.');
+    }
 
     partial = new Database(partialFile);
     partial.exec('CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT NOT NULL)');
