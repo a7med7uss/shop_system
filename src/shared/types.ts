@@ -132,6 +132,9 @@ export interface StoreFlowAPI {
   getRememberedCredentials: () => Promise<{username:string;password:string}|null>;
   saveRememberedCredentials: (input:{username:string;password:string;remember:boolean}) => Promise<{saved:boolean}>;
   toggleFullscreen: () => Promise<boolean>;
+  minimizeWindow: () => Promise<void>;
+  toggleMaximizeWindow: () => Promise<boolean>;
+  closeWindow: () => Promise<void>;
   getSettings: () => Promise<StoreSettings>;
   saveSettings: (settings:StoreSettings) => Promise<StoreSettings>;
   chooseDirectory: () => Promise<string|null>;
