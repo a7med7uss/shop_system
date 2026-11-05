@@ -1,0 +1,44 @@
+KASHO SOFTWARE LICENSE AND ACCEPTABLE USE TERMS
+Version 1.0 — 5 November 2026
+
+ARABIC
+
+1. الترخيص والملكية
+برنامج Kasho («البرنامج») مملوك لمطوره، أحمد حسين عمارة. يمنحك هذا الاتفاق حق استخدام نسخة البرنامج التي حصلت عليها بصورة مشروعة لإدارة نشاطك التجاري. لا تنتقل إليك ملكية البرنامج أو علامته أو تصميمه أو شيفرته.
+
+2. الاستخدام المسموح
+يجوز لك تثبيت البرنامج واستخدامه على أجهزة النشاط التجاري الذي تديره. لا يجوز لك بيع البرنامج أو إعادة توزيعه أو إزالة إشعارات الملكية أو تقديمه على أنه منتجك. ولا يجوز لك العبث بآليات الترخيص أو تجاوز وسائل الحماية أو استغلال البرنامج بطريقة غير قانونية.
+
+3. البيانات والنسخ الاحتياطية
+تُحفظ بيانات المبيعات والمخزون محليًا على جهازك في الإصدار الحالي. أنت مسؤول عن صحة البيانات، وحماية حسابات Windows، وإنشاء نسخ احتياطية منتظمة، والتحقق من إمكانية استعادتها. لا ترسل نسخة احتياطية إلى طرف آخر قبل التأكد من احتوائها على بيانات لا ترغب في مشاركتها.
+
+4. حدود المسؤولية
+يُقدّم البرنامج «كما هو» دون ضمان خلوه من الأخطاء أو ملاءمته لكل الأجهزة والطابعات والماسحات. يجب اختبار البرنامج والنسخ الاحتياطية على بيانات تجريبية قبل الاعتماد عليه في عمليات تجارية حقيقية. يتحمل المستخدم مسؤولية الاحتفاظ بنسخ مستقلة من سجلاته.
+
+5. الخصوصية
+هذا الإصدار لا يفعّل إرسال تقارير استخدام أو تحليلات إلى المطور. تظل البيانات التشغيلية محلية ما لم يختر المستخدم بنفسه مشاركة ملفات أو معلومات خارج البرنامج. أي ميزة قياس استخدام مستقبلية يجب أن تُعرض بسياسة خصوصية وموافقة منفصلة قابلة للرفض.
+
+6. الموافقة
+باختيار «أوافق» والاستمرار في التثبيت، تقر بأنك قرأت شروط الاستخدام وتقبلها.
+
+ENGLISH
+
+1. License and ownership
+Kasho (the “Software”) is owned by its developer, Ahmed Hussein Emara. This agreement grants you a limited right to use a lawfully obtained copy of the Software for your business operations. It does not transfer ownership of the Software, its brand, design, or source code.
+
+2. Permitted use
+You may install and use the Software on devices used by the business you operate. You may not sell, redistribute, rebrand, remove ownership notices, or represent the Software as your own product. You may not bypass protection mechanisms or use the Software for unlawful purposes.
+
+3. Data and backups
+In this release, sales and inventory data are stored locally on your computer. You are responsible for data accuracy, Windows account security, regular backups, and testing restore operations. Do not share a backup file until you have checked whether it contains information you do not wish to disclose.
+
+4. Disclaimer
+The Software is provided “as is” without a guarantee that it will be error-free or compatible with every device, printer, or scanner. Test the application and backups with disposable records before relying on it for real business operations. Keep independent copies of important business records.
+
+5. Privacy
+This release does not enable telemetry or send usage analytics to the developer. Operational data stays local unless you choose to share files or information outside the Software. Any future usage analytics feature must be covered by a separate privacy notice and a clear opt-in choice that can be declined.
+
+6. Acceptance
+By selecting “I agree” and continuing the installation, you confirm that you have read and accepted these terms.
+
+This document is a product-use notice, not a substitute for jurisdiction-specific legal advice. The owner should obtain legal review before commercial distribution.

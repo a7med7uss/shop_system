@@ -1,7 +1,7 @@
 export type Role = 'admin' | 'seller';
 export type DiscountLevel = 'high' | 'monster' | null;
 export type Language = 'ar' | 'en';
-export type Theme = 'light' | 'dark';
+export type Theme = 'system' | 'light' | 'dark';
 export type PaperSize = 'A4' | '58mm' | '80mm';
 
 export interface User {
@@ -23,10 +23,8 @@ export interface Product {
   sellingPrice: number;
   stockQuantity: number;
   allowDiscount: boolean;
-  serialTracking: boolean;
   lowStockThreshold: number;
   tags: string[];
-  scannedSerial?: string;
 }
 
 export interface ProductInput {
@@ -40,17 +38,14 @@ export interface ProductInput {
   sellingPrice: number;
   stockQuantity?: number;
   allowDiscount: boolean;
-  serialTracking: boolean;
   lowStockThreshold: number;
   tags: string[];
-  serials?: string[];
 }
 
 export interface CartLine {
   productId: number;
   quantity: number;
   discountLevel: DiscountLevel;
-  serialNumbers?: string[];
 }
 
 export interface StoreSettings {
@@ -63,13 +58,13 @@ export interface StoreSettings {
   currency: string;
   currencySymbol: string;
   theme: Theme;
+  fontScale: number;
   paperSize: PaperSize;
   discountEnabled: boolean;
   highDiscountPercent: number;
   monsterDiscountPercent: number;
   backupPaths: string[];
   backupIntervalHours: number;
-  backupRetention: number;
   lastBackupAt: string;
 }
 
@@ -98,7 +93,6 @@ export interface SaleLine {
   unitPrice: number;
   discountAmount: number;
   discountLevel: DiscountLevel;
-  serialNumbers: string[];
 }
 
 export interface SaleDetails extends Sale {
@@ -135,6 +129,9 @@ export interface StoreFlowAPI {
   login: (input:{username:string;password:string}) => Promise<User>;
   logout: () => Promise<void>;
   getCurrentUser: () => Promise<User|null>;
+  getRememberedCredentials: () => Promise<{username:string;password:string}|null>;
+  saveRememberedCredentials: (input:{username:string;password:string;remember:boolean}) => Promise<{saved:boolean}>;
+  toggleFullscreen: () => Promise<boolean>;
   getSettings: () => Promise<StoreSettings>;
   saveSettings: (settings:StoreSettings) => Promise<StoreSettings>;
   chooseDirectory: () => Promise<string|null>;
@@ -145,12 +142,12 @@ export interface StoreFlowAPI {
   scanProduct: (code:string) => Promise<Product|null>;
   createProduct: (input:ProductInput) => Promise<Product>;
   updateProduct: (id:number,input:ProductInput) => Promise<Product>;
-  adjustStock: (input:{productId:number;delta:number;unitCost?:number;reason:string;serials?:string[]}) => Promise<void>;
+  adjustStock: (input:{productId:number;delta:number;reason:string}) => Promise<void>;
   dashboard: (from:string,to:string) => Promise<Dashboard>;
   quoteSale: (input:{items:CartLine[]}) => Promise<{subtotal:number;discountTotal:number;total:number}>;
   createSale: (input:{items:CartLine[];paymentMethod:string;customerName?:string}) => Promise<Sale>;
   getSale: (id:string) => Promise<SaleDetails>;
-  returnSaleItem: (input:{saleItemId:number;quantity:number;reason:string;serialNumbers?:string[]}) => Promise<void>;
+  returnSaleItem: (input:{saleItemId:number;quantity:number;reason:string;}) => Promise<void>;
   voidSale: (saleId:string,reason:string) => Promise<void>;
   listSales: () => Promise<Sale[]>;
   getMovements: () => Promise<Movement[]>;

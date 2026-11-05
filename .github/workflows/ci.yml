@@ -1,7 +1,7 @@
-name: StoreFlow CI
+name: Kasho CI
 on:
   push:
-    branches: [main, storeflow-desktop-v1]
+    branches: [main, kasho-rebrand-v1]
   pull_request:
     branches: [main]
 permissions:

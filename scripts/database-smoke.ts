@@ -23,12 +23,12 @@ try {
   if (missing.length) throw new Error('Missing database tables: ' + missing.join(', '));
 
   const settings = getSettings(db);
-  if (settings.currency !== 'EGP' || settings.paperSize !== 'A4' || settings.theme !== 'light') {
+  if (settings.currency !== 'EGP' || settings.paperSize !== 'A4' || settings.theme !== 'system' || settings.fontScale !== 1) {
     throw new Error('Unexpected first-run defaults.');
   }
   if (settings.backupPaths.length !== 3) throw new Error('Expected exactly three backup destinations.');
 
-  const password = 'StoreFlowSmoke#2026';
+  const password = 'KashoSmoke#2026';
   const stored = hashPassword(password);
   if (!verifyPassword(password, stored) || verifyPassword('wrong-password', stored)) {
     throw new Error('Password hashing/verification check failed.');
@@ -39,7 +39,7 @@ try {
     throw new Error('SQLite integrity check failed.');
   }
 
-  console.log('StoreFlow database smoke test passed.');
+  console.log('Kasho database smoke test passed.');
 } finally {
   if (db?.open) db.close();
   for (const suffix of ['', '-wal', '-shm']) {

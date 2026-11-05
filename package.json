@@ -1,8 +1,8 @@
 {
   "name": "storeflow",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "Local-first retail inventory and point-of-sale desktop system",
+  "description": "Kasho — Scan. Sell. Done. Local-first retail management system",
   "author": "Ahmed Hussein Emara",
   "license": "UNLICENSED",
   "type": "module",
@@ -21,8 +21,8 @@
     "lucide-react": "^0.468.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "@fontsource/tajawal": "^5.3.0",
-    "@fontsource/manrope": "^5.3.0"
+    "@fontsource/ibm-plex-sans-arabic": "^5.2.6",
+    "@fontsource/plus-jakarta-sans": "^5.2.6"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
@@ -41,7 +41,7 @@
   },
   "build": {
     "appId": "com.ahmedhusseinemara.storeflow",
-    "productName": "StoreFlow",
+    "productName": "Kasho",
     "copyright": "Copyright © 2026 Ahmed Hussein Emara",
     "directories": {
       "output": "release"
@@ -64,16 +64,32 @@
           ]
         }
       ],
-      "artifactName": "StoreFlow-Setup.exe"
+      "artifactName": "Kasho-Setup.exe",
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "StoreFlow",
-      "deleteAppDataOnUninstall": false
-    }
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": false,
+      "shortcutName": "Kasho",
+      "deleteAppDataOnUninstall": false,
+      "displayLanguageSelector": true,
+      "installerLanguages": [
+        "en_US",
+        "ar"
+      ],
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "include": "build/installer.nsh",
+      "license": "build/license.txt"
+    },
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ]
   }
 }
