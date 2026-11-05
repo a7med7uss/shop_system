@@ -75,22 +75,28 @@ const login=()=>{if(!session)throw new Error('سجّل الدخول أولاً.'
 const admin=()=>{const u=login();if(u.role!=='admin')throw new Error('هذه العملية للأدمن فقط.');return u;};
 const userDto=(r:any)=>({id:r.id,username:r.username,displayName:r.display_name,role:r.role});
 function productDto(row:any){
-  const dto:any={id:row.id,name:row.name,brand:row.brand,model:row.model,category:row.category,genericCategory:row.generic_category,barcode:row.barcode||'',sellingPrice:row.selling_price,stockQuantity:row.stock_quantity,allowDiscount:!!row.allow_discount,lowStockThreshold:row.low_stock_threshold,tags:(db.prepare('SELECT tag FROM product_tags WHERE product_id=? ORDER BY tag').all(row.id) as any[]).map(x=>x.tag)};
+  const dto:any={id:row.id,name:row.name,brand:row.brand,model:row.model,category:row.category,genericCategory:row.generic_category,barcode:row.barcode||'',sellingPrice:row.selling_price,stockQuantity:row.stock_quantity,allowDiscount:!!row.allow_discount,lowStockThreshold:row.low_stock_threshold,visualType:row.visual_type||'default',iconKey:row.icon_key||'',visualColor:row.visual_color||'',imageData:row.image_data||'',tags:(db.prepare('SELECT tag FROM product_tags WHERE product_id=? ORDER BY tag').all(row.id) as any[]).map(x=>x.tag)};
   if(session?.role==='admin')dto.purchasePrice=row.purchase_price;
   return dto;
 }
 function tagsFor(id:number,tags:string[]){db.prepare('DELETE FROM product_tags WHERE product_id=?').run(id);const s=db.prepare('INSERT OR IGNORE INTO product_tags(product_id,tag) VALUES (?,?)');for(const item of tags||[]){const v=String(item).trim().replace(/^#+/,'');if(v)s.run(id,v.slice(0,50));}}
 function addProduct(input:ProductInput,userId:number){
   if(!input.name?.trim())throw new Error('اسم المنتج مطلوب.');
+  const visualType=input.visualType||'default';
+  if(!['default','icon','color','image'].includes(visualType))throw new Error('نوع مظهر المنتج غير صالح.');
+  if(input.visualColor&&!/^#[0-9a-fA-F]{6}$/.test(input.visualColor))throw new Error('لون المنتج غير صالح.');
+  if(input.imageData&&(!/^data:image\/(png|jpeg|webp);base64,/.test(input.imageData)||input.imageData.length>2.1*1024*1024))throw new Error('صورة المنتج غير صالحة أو أكبر من الحد المسموح.');
+  if(visualType==='image'&&!input.imageData)throw new Error('اختر صورة المنتج أولاً.');
+  if(visualType==='icon'&&!input.iconKey)throw new Error('اختر أيقونة المنتج أولاً.');
   if(input.purchasePrice<0||input.sellingPrice<0)throw new Error('الأسعار يجب ألا تكون سالبة.');
   const qty=Number(input.stockQuantity||0);
   if(!Number.isInteger(qty)||qty<0)throw new Error('الكمية غير صحيحة.');
   const stamp=now();
   const tx=db.transaction(()=>{
-    const result=db.prepare('INSERT INTO products(name,brand,model,category,generic_category,barcode,purchase_price,selling_price,stock_quantity,allow_discount,serial_tracking,low_stock_threshold,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-      .run(input.name.trim(),input.brand||'',input.model||'',input.category||'',input.genericCategory||'',input.barcode?.trim()||null,input.purchasePrice,input.sellingPrice,qty,input.allowDiscount?1:0,0,input.lowStockThreshold||5,stamp,stamp);
+    const result=db.prepare('INSERT INTO products(name,brand,model,category,generic_category,barcode,purchase_price,selling_price,stock_quantity,allow_discount,serial_tracking,low_stock_threshold,visual_type,icon_key,visual_color,image_data,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(input.name.trim(),input.brand||'',input.model||'',input.category||'',input.genericCategory||'',input.barcode?.trim()||null,input.purchasePrice,input.sellingPrice,qty,input.allowDiscount?1:0,0,input.lowStockThreshold||5,input.visualType||'default',input.iconKey||'',input.visualColor||'',input.imageData||'',stamp,stamp);
     const id=Number(result.lastInsertRowid);tagsFor(id,input.tags||[]);
-    if(qty)db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)').run(id,'opening',qty,'رصيد افتتاحي',userId,stamp);
+    if(qty)db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)').run(id,'restock',qty,'إضافة مخزون عند إنشاء المنتج',userId,stamp);
     audit(db,userId,'product.created',{id,name:input.name});
     return id;
   });
@@ -192,6 +198,15 @@ function register(){
   });
   ipcMain.handle('dialog:directory',async()=>{admin();const r=await dialog.showOpenDialog(win!,{properties:['openDirectory','createDirectory']});return r.canceled?null:r.filePaths[0];});
   ipcMain.handle('dialog:image',async()=>{admin();const r=await dialog.showOpenDialog(win!,{properties:['openFile'],filters:[{name:'Images',extensions:['png','jpg','jpeg','webp','svg']}]});return r.canceled?null:r.filePaths[0];});
+  ipcMain.handle('products:choose-image',async()=>{
+    admin();
+    const picked=await dialog.showOpenDialog(win!,{properties:['openFile'],filters:[{name:'Product images',extensions:['png','jpg','jpeg','webp']}]});
+    if(picked.canceled||!picked.filePaths[0])return null;
+    const file=picked.filePaths[0],stat=fs.statSync(file);
+    if(stat.size>1.5*1024*1024)throw new Error('حجم صورة المنتج يجب ألا يتجاوز 1.5 ميجابايت.');
+    const ext=path.extname(file).toLowerCase(),mime=ext==='.png'?'image/png':ext==='.webp'?'image/webp':'image/jpeg';
+    return 'data:'+mime+';base64,'+fs.readFileSync(file).toString('base64');
+  });
   ipcMain.handle('backup:run',async()=>{admin();return backup();});
   ipcMain.handle('backup:restore',async()=>{
     const actor=admin();
@@ -238,8 +253,8 @@ function register(){
   ipcMain.handle('products:update',(_e,id:number,v:ProductInput)=>{
     const u=admin();const p=db.prepare('SELECT * FROM products WHERE id=?').get(id) as any;if(!p)throw new Error('المنتج غير موجود.');
     const tx=db.transaction(()=>{
-      db.prepare('UPDATE products SET name=?,brand=?,model=?,category=?,generic_category=?,barcode=?,purchase_price=?,selling_price=?,allow_discount=?,low_stock_threshold=?,updated_at=? WHERE id=?')
-        .run(v.name.trim(),v.brand||'',v.model||'',v.category||'',v.genericCategory||'',v.barcode?.trim()||null,v.purchasePrice,v.sellingPrice,v.allowDiscount?1:0,v.lowStockThreshold||5,now(),id);
+      db.prepare('UPDATE products SET name=?,brand=?,model=?,category=?,generic_category=?,barcode=?,purchase_price=?,selling_price=?,allow_discount=?,low_stock_threshold=?,visual_type=?,icon_key=?,visual_color=?,image_data=?,updated_at=? WHERE id=?')
+        .run(v.name.trim(),v.brand||'',v.model||'',v.category||'',v.genericCategory||'',v.barcode?.trim()||null,v.purchasePrice,v.sellingPrice,v.allowDiscount?1:0,v.lowStockThreshold||5,v.visualType||'default',v.iconKey||'',v.visualColor||'',v.imageData||'',now(),id);
       tagsFor(id,v.tags||[]);audit(db,u.id,'product.updated',{id});
     });tx();return productDto(db.prepare('SELECT * FROM products WHERE id=?').get(id));
   });
