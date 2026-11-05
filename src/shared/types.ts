@@ -71,6 +71,7 @@ export interface StoreSettings {
   discountEnabled: boolean;
   highDiscountPercent: number;
   monsterDiscountPercent: number;
+  confirmSaleEnabled: boolean;
   backupPaths: string[];
   backupIntervalHours: number;
   lastBackupAt: string;
@@ -83,6 +84,7 @@ export interface Sale {
   subtotal: number;
   discountTotal: number;
   total: number;
+  totalRefunded?: number;
   currency: string;
   currencySymbol: string;
   paymentMethod: string;
@@ -155,6 +157,7 @@ export interface StoreFlowAPI {
   scanProduct: (code:string) => Promise<Product|null>;
   createProduct: (input:ProductInput) => Promise<Product>;
   updateProduct: (id:number,input:ProductInput) => Promise<Product>;
+  deleteProduct: (id:number) => Promise<void>;
   adjustStock: (input:{productId:number;delta:number;reason:string}) => Promise<void>;
   dashboard: (from:string,to:string) => Promise<Dashboard>;
   quoteSale: (input:{items:CartLine[]}) => Promise<{subtotal:number;discountTotal:number;total:number}>;
