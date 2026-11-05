@@ -262,3 +262,63 @@ img{max-width:100%}
 
 /* Keep the navigation clear of the custom 34px title strip. */
 .rail{padding-top:34px;box-sizing:border-box}
+
+
+/* Responsive desktop refinement: use the full client area, not a zoomed centered canvas. */
+#root{zoom:1!important;width:100%;height:100dvh;min-width:0;min-height:0}
+html,body{width:100%;height:100dvh;min-width:0;min-height:0;overflow:hidden}
+body{font-size:calc(14px * var(--kasho-font-scale,1))}
+*{scrollbar-width:none}
+*::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}
+.window-controls{display:none!important}
+.window-drag-region{height:0!important;right:0!important;pointer-events:none}
+.workspace{width:calc(100% - 72px);height:100dvh;min-width:0;min-height:0}
+.workspace>.topbar{height:66px;min-height:66px;flex:0 0 66px;padding:0 clamp(14px,2vw,28px);box-sizing:border-box;-webkit-app-region:drag;app-region:drag}
+.topbar button,.topbar input,.topbar select,.topbar a{ -webkit-app-region:no-drag;app-region:no-drag}
+.rail{padding-top:12px!important;height:100dvh;box-sizing:border-box}
+.rail nav{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.workspace>.page{width:100%;max-width:none;margin:0;padding:clamp(18px,2vw,34px);min-height:0;overflow:auto;overscroll-behavior:contain}
+.settings{width:100%;max-width:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:clamp(12px,1.4vw,20px)}
+.settings>.panel:nth-child(1),.settings>.panel:nth-child(6),.settings>.panel:nth-child(7),.settings>.panel:nth-child(8){grid-column:1/-1}
+.settings>.panel{min-width:0}
+.workspace>.pos{width:100%;max-width:none;margin:0;height:calc(100dvh - 66px);min-height:0;overflow:hidden;grid-template-columns:minmax(0,1fr) minmax(300px,min(29vw,430px));gap:clamp(12px,1.5vw,22px);padding:clamp(12px,1.6vw,24px)}
+.pos .catalog{min-height:0;min-width:0;overflow:hidden}
+.pos .catalog>.products,.pos .catalog>.table-scroll{flex:1 1 auto;min-height:0;overflow:auto}
+.pos .heading{width:100%;align-items:center}
+.pos-heading-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.return-trigger{border:1px solid #e5484d;background:#e5484d;color:#fff;border-radius:11px;padding:9px 16px;font-weight:700;font-size:12px;min-height:38px}
+.return-trigger:hover{background:#c93636;border-color:#c93636}
+.cart{height:100%;max-height:100%;min-height:0;position:relative;top:auto;overflow:hidden}
+.cart-items{flex:1 1 auto;min-height:0;overflow:auto}
+.products{grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));align-content:start}
+.page>.panel,.page>.columns,.page>.metrics{width:100%;min-width:0}
+.page>.columns{grid-template-columns:repeat(2,minmax(0,1fr))}
+.topbar .theme-toggle{color:var(--orange);background:var(--orange-soft);border-color:var(--line)}
+.appearance-hint{color:var(--muted);font-size:12px;margin:0 0 12px}
+.invoice-dialog{display:flex;flex-direction:column;gap:12px;min-height:0}
+.invoice-preview{width:100%;height:min(55vh,560px);border:1px solid var(--line);border-radius:12px;background:#fff}
+.return-summary{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
+.return-summary strong{color:var(--red);font-size:20px}
+.return-summary span,.return-summary p{color:var(--muted);font-size:11px}
+.return-summary p{grid-column:1/-1;margin:4px 0 0}
+.invoice-dialog .modal-actions{justify-content:flex-end}
+@media(max-width:1050px){
+ .workspace>.pos{grid-template-columns:minmax(0,1fr) minmax(270px,34vw)}
+ .settings{grid-template-columns:minmax(0,1fr)}
+ .settings>.panel{grid-column:1/-1}
+}
+@media(max-width:820px){
+ .workspace{width:calc(100% - 58px)}
+ .workspace>.pos{height:calc(100dvh - 66px);grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(260px,1fr) minmax(250px,.9fr);overflow:auto}
+ .pos .catalog{overflow:visible}
+ .cart{height:auto;max-height:none}
+ .page>.columns{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:560px){
+ .workspace{width:calc(100% - 52px)}
+ .workspace>.topbar{padding:0 9px}
+ .workspace>.page{padding:14px 10px}
+ .workspace>.pos{padding:10px}
+ .topbar-clock{display:none}
+ .topbar>div{gap:6px}
+}
