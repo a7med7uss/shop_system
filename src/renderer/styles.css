@@ -259,3 +259,6 @@ img{max-width:100%}
  .topbar{gap:6px}
  .topbar-clock{display:none}
 }
+
+/* Keep the navigation clear of the custom 34px title strip. */
+.rail{padding-top:34px;box-sizing:border-box}
