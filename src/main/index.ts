@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import Database from 'better-sqlite3';
 import type {ProductInput,StoreSettings,DiscountLevel,PaperSize} from '../shared/types';
-import {openDatabase,hashPassword,verifyPassword,getSettings,saveSettings,audit} from './database';
+import {openDatabase,hashPassword,verifyPassword,getSettings,saveSettings,audit,validateBackupDatabase} from './database';
 
 let db:Database.Database;
 let databasePath='';
@@ -142,17 +142,11 @@ function register(){
     });
     if(picked.canceled||!picked.filePaths[0])return {success:false,message:'تم إلغاء اختيار النسخة.'};
     const source=picked.filePaths[0];
-    let candidate:Database.Database|null=null;
-    try{
-      candidate=new Database(source,{readonly:true,fileMustExist:true});
-      const check=candidate.pragma('quick_check') as any[];
-      const hasProducts=!!candidate.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='products'").get();
-      if(!check.length||String(check[0].quick_check).toLowerCase()!=='ok'||!hasProducts){
-        throw new Error('ملف النسخة غير صالح أو لا يحتوي قاعدة Kasho.');
-      }
-    }finally{
-      if(candidate?.open)candidate.close();
+    if(path.resolve(source)===path.resolve(databasePath)){
+      throw new Error('لا يمكن استعادة قاعدة البيانات النشطة فوق نفسها. اختر ملف نسخة احتياطية آخر.');
     }
+    const validation=validateBackupDatabase(source);
+    if(!validation.valid)throw new Error(validation.message);
     const safetyPath=path.join(path.dirname(databasePath),'Kasho_PreRestore_'+now().replace(/[:.]/g,'-')+'.sqlite');
     await db.backup(safetyPath);
     db.close();
