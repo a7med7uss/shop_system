@@ -1,4 +1,4 @@
-import {app,BrowserWindow,ipcMain,dialog,shell} from 'electron';
+import {app,BrowserWindow,ipcMain,dialog,shell,safeStorage} from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -8,6 +8,9 @@ import {openDatabase,hashPassword,verifyPassword,getSettings,saveSettings,audit}
 
 let db:Database.Database;
 let databasePath='';
+const rememberFile=()=>path.join(app.getPath('userData'),'remembered-login.bin');
+app.setName('storeflow');
+app.setAppUserModelId('com.ahmedhusseinemara.storeflow');
 let win:BrowserWindow|null=null;
 let session:any=null;
 let backupTimer:NodeJS.Timeout|null=null;
@@ -17,7 +20,7 @@ const login=()=>{if(!session)throw new Error('سجّل الدخول أولاً.'
 const admin=()=>{const u=login();if(u.role!=='admin')throw new Error('هذه العملية للأدمن فقط.');return u;};
 const userDto=(r:any)=>({id:r.id,username:r.username,displayName:r.display_name,role:r.role});
 function productDto(row:any){
-  const dto:any={id:row.id,name:row.name,brand:row.brand,model:row.model,category:row.category,genericCategory:row.generic_category,barcode:row.barcode||'',sellingPrice:row.selling_price,stockQuantity:row.stock_quantity,allowDiscount:!!row.allow_discount,serialTracking:!!row.serial_tracking,lowStockThreshold:row.low_stock_threshold,tags:(db.prepare('SELECT tag FROM product_tags WHERE product_id=? ORDER BY tag').all(row.id) as any[]).map(x=>x.tag)};
+  const dto:any={id:row.id,name:row.name,brand:row.brand,model:row.model,category:row.category,genericCategory:row.generic_category,barcode:row.barcode||'',sellingPrice:row.selling_price,stockQuantity:row.stock_quantity,allowDiscount:!!row.allow_discount,lowStockThreshold:row.low_stock_threshold,tags:(db.prepare('SELECT tag FROM product_tags WHERE product_id=? ORDER BY tag').all(row.id) as any[]).map(x=>x.tag)};
   if(session?.role==='admin')dto.purchasePrice=row.purchase_price;
   return dto;
 }
@@ -27,15 +30,11 @@ function addProduct(input:ProductInput,userId:number){
   if(input.purchasePrice<0||input.sellingPrice<0)throw new Error('الأسعار يجب ألا تكون سالبة.');
   const qty=Number(input.stockQuantity||0);
   if(!Number.isInteger(qty)||qty<0)throw new Error('الكمية غير صحيحة.');
-  const serials=(input.serials||[]).map(x=>x.trim()).filter(Boolean);
-  if(input.serialTracking&&serials.length!==qty)throw new Error('أدخل Serial لكل قطعة في المخزون.');
   const stamp=now();
   const tx=db.transaction(()=>{
     const result=db.prepare('INSERT INTO products(name,brand,model,category,generic_category,barcode,purchase_price,selling_price,stock_quantity,allow_discount,serial_tracking,low_stock_threshold,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-      .run(input.name.trim(),input.brand||'',input.model||'',input.category||'',input.genericCategory||'',input.barcode?.trim()||null,input.purchasePrice,input.sellingPrice,qty,input.allowDiscount?1:0,input.serialTracking?1:0,input.lowStockThreshold||5,stamp,stamp);
+      .run(input.name.trim(),input.brand||'',input.model||'',input.category||'',input.genericCategory||'',input.barcode?.trim()||null,input.purchasePrice,input.sellingPrice,qty,input.allowDiscount?1:0,0,input.lowStockThreshold||5,stamp,stamp);
     const id=Number(result.lastInsertRowid);tagsFor(id,input.tags||[]);
-    const serialStmt=db.prepare("INSERT INTO product_serials(product_id,serial_number,status,created_at) VALUES (?,?,'available',?)");
-    for(const serial of serials)serialStmt.run(id,serial,stamp);
     if(qty)db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)').run(id,'opening',qty,'رصيد افتتاحي',userId,stamp);
     audit(db,userId,'product.created',{id,name:input.name});
     return id;
@@ -43,19 +42,39 @@ function addProduct(input:ProductInput,userId:number){
   return tx();
 }
 function saleDto(row:any){return {id:row.id,invoiceNumber:row.invoice_number,cashierName:row.cashier_name,subtotal:row.subtotal,discountTotal:row.discount_total,total:row.total,currency:row.currency,currencySymbol:row.currency_symbol,paymentMethod:row.payment_method,customerName:row.customer_name||'',status:row.status,createdAt:row.created_at};}
+async function readRememberedLogin(){
+  try{
+    if(!fs.existsSync(rememberFile())||!(await safeStorage.isAsyncEncryptionAvailable()))return null;
+    const decrypted=await safeStorage.decryptStringAsync(fs.readFileSync(rememberFile()));
+    const raw=typeof decrypted==='string'?decrypted:decrypted.result;
+    const parsed=JSON.parse(raw);
+    return typeof parsed.username==='string'&&typeof parsed.password==='string'?parsed:null;
+  }catch{return null;}
+}
+async function writeRememberedLogin(value:any){
+  const file=rememberFile();
+  if(!value?.remember){try{fs.unlinkSync(file);}catch{}return {saved:false};}
+  const username=String(value.username||'').trim(),password=String(value.password||'');
+  if(!username||!password)throw new Error('بيانات الدخول غير مكتملة.');
+  if(!(await safeStorage.isAsyncEncryptionAvailable()))throw new Error('ميزة حفظ كلمة المرور المشفّرة غير متاحة على هذا الجهاز.');
+  fs.mkdirSync(path.dirname(file),{recursive:true});
+  fs.writeFileSync(file,await safeStorage.encryptStringAsync(JSON.stringify({username,password})),{mode:0o600});
+  return {saved:true};
+}
+
 async function backup(){
   if(backupBusy)throw new Error('النسخ الاحتياطي يعمل بالفعل.');
-  const settings=getSettings(db);const dirs=(settings.backupPaths||[]).filter(Boolean).slice(0,3);
-  if(!dirs.length)throw new Error('حدد مسارًا واحدًا على الأقل.');
+  const settings=getSettings(db);const configured=(settings.backupPaths||[]).filter(Boolean).slice(0,3);
+  const dirs=configured.length?configured:[path.join(app.getPath('documents'),'Kasho','Backups')];
   backupBusy=true;const output:any[]=[];const stamp=now().replace(/[:.]/g,'-');
   try{
     for(const dir of dirs){
       try{
         fs.mkdirSync(dir,{recursive:true});
-        const file=path.join(dir,'StoreFlow_Backup_'+stamp+'.sqlite');
+        const file=path.join(dir,'Kasho_Backup_'+stamp+'.sqlite');
         await db.backup(file);
-        const keep=Math.max(1,settings.backupRetention||14);
-        const old=fs.readdirSync(dir).filter(x=>x.startsWith('StoreFlow_Backup_')&&x.endsWith('.sqlite')).map(name=>({name,mtime:fs.statSync(path.join(dir,name)).mtimeMs})).sort((a,b)=>b.mtime-a.mtime);
+        const keep=30;
+        const old=fs.readdirSync(dir).filter(x=>(x.startsWith('Kasho_Backup_')||x.startsWith('StoreFlow_Backup_'))&&x.endsWith('.sqlite')).map(name=>({name,mtime:fs.statSync(path.join(dir,name)).mtimeMs})).sort((a,b)=>b.mtime-a.mtime);
         for(const item of old.slice(keep)){try{fs.unlinkSync(path.join(dir,item.name));}catch{}}
         output.push({path:dir,success:true,message:'تم النسخ'});
       }catch(e:any){output.push({path:dir,success:false,message:e.message||'فشل النسخ'});}
@@ -70,14 +89,14 @@ function scheduleBackup(){
   if(backupTimer)clearInterval(backupTimer);
   backupTimer=setInterval(async()=>{
     if(backupBusy||!db||!app.isReady())return;
-    const s=getSettings(db);if(!(s.backupPaths||[]).some(Boolean))return;
+    const s=getSettings(db);
     const span=Math.max(1,s.backupIntervalHours||24)*3600000;
     const last=s.lastBackupAt?new Date(s.lastBackupAt).getTime():0;
     if(!last||Date.now()-last>=span){try{await backup();}catch(e){console.error(e);}}
   },60000);
 }
 function makeWindow(){
-  win=new BrowserWindow({width:1480,height:920,minWidth:1100,minHeight:700,backgroundColor:'#f7f7f4',title:'StoreFlow',webPreferences:{preload:path.join(app.getAppPath(),'dist-electron','preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  win=new BrowserWindow({width:1480,height:920,minWidth:1100,minHeight:700,backgroundColor:'#FFFFFF',title:'Kasho',icon:app.isPackaged?path.join(process.resourcesPath,'icon.ico'):path.join(process.cwd(),'build','icon.ico'),webPreferences:{preload:path.join(app.getAppPath(),'dist-electron','preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   const dev=process.env.VITE_DEV_SERVER_URL;
   if(dev)win.loadURL(dev);else win.loadFile(path.join(app.getAppPath(),'dist','index.html'));
   win.on('closed',()=>{win=null;});
@@ -99,6 +118,9 @@ function register(){
   });
   ipcMain.handle('auth:logout',()=>{if(session)audit(db,session.id,'auth.logout',{});session=null;});
   ipcMain.handle('auth:current',()=>session);
+  ipcMain.handle('auth:remember:get',async()=>readRememberedLogin());
+  ipcMain.handle('auth:remember:set',async(_e,value)=>writeRememberedLogin(value));
+  ipcMain.handle('window:toggle-fullscreen',()=>{login();if(!win||win.isDestroyed())return false;const next=!win.isFullScreen();win.setFullScreen(next);return next;});
   ipcMain.handle('settings:get',()=>{login();return getSettings(db);});
   ipcMain.handle('settings:save',(_e,v:StoreSettings)=>{
     const u=admin();if(!Array.isArray(v.backupPaths)||v.backupPaths.length>3)throw new Error('ثلاثة مسارات نسخ احتياطي كحد أقصى.');
@@ -106,7 +128,7 @@ function register(){
     s.highDiscountPercent=Math.max(0,Math.min(100,Number(s.highDiscountPercent)||0));
     s.monsterDiscountPercent=Math.max(0,Math.min(100,Number(s.monsterDiscountPercent)||0));
     s.backupIntervalHours=Math.max(1,Number(s.backupIntervalHours)||24);
-    s.backupRetention=Math.max(1,Math.min(365,Number(s.backupRetention)||14));
+    s.fontScale=Math.max(0.9,Math.min(1.2,Number(s.fontScale)||1));
     saveSettings(db,s);audit(db,u.id,'settings.updated',{currency:s.currency,paperSize:s.paperSize});scheduleBackup();return s;
   });
   ipcMain.handle('dialog:directory',async()=>{admin();const r=await dialog.showOpenDialog(win!,{properties:['openDirectory','createDirectory']});return r.canceled?null:r.filePaths[0];});
@@ -116,7 +138,7 @@ function register(){
     const actor=admin();
     const picked=await dialog.showOpenDialog(win!,{
       properties:['openFile'],
-      filters:[{name:'StoreFlow SQLite backup',extensions:['sqlite','sqlite3','db']}]
+      filters:[{name:'Kasho SQLite backup',extensions:['sqlite','sqlite3','db']}]
     });
     if(picked.canceled||!picked.filePaths[0])return {success:false,message:'تم إلغاء اختيار النسخة.'};
     const source=picked.filePaths[0];
@@ -126,12 +148,12 @@ function register(){
       const check=candidate.pragma('quick_check') as any[];
       const hasProducts=!!candidate.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='products'").get();
       if(!check.length||String(check[0].quick_check).toLowerCase()!=='ok'||!hasProducts){
-        throw new Error('ملف النسخة غير صالح أو لا يحتوي قاعدة StoreFlow.');
+        throw new Error('ملف النسخة غير صالح أو لا يحتوي قاعدة Kasho.');
       }
     }finally{
       if(candidate?.open)candidate.close();
     }
-    const safetyPath=path.join(path.dirname(databasePath),'StoreFlow_PreRestore_'+now().replace(/[:.]/g,'-')+'.sqlite');
+    const safetyPath=path.join(path.dirname(databasePath),'Kasho_PreRestore_'+now().replace(/[:.]/g,'-')+'.sqlite');
     await db.backup(safetyPath);
     db.close();
     try{
@@ -156,17 +178,12 @@ function register(){
   });
   ipcMain.handle('products:scan',(_e,code)=>{
     login();const value=String(code||'').trim();if(!value)return null;
-    const serial=db.prepare("SELECT product_id FROM product_serials WHERE serial_number=? AND status='available'").get(value) as any;
-    const row=serial?db.prepare('SELECT * FROM products WHERE id=? AND active=1').get(serial.product_id):db.prepare('SELECT * FROM products WHERE barcode=? AND active=1').get(value);
-    if(!row)return null;
-    const result=productDto(row);
-    if(serial)result.scannedSerial=value;
-    return result;
+    const row=db.prepare('SELECT * FROM products WHERE barcode=? AND active=1').get(value) as any;
+    return row?productDto(row):null;
   });
   ipcMain.handle('products:create',(_e,v:ProductInput)=>{const u=admin();return productDto(db.prepare('SELECT * FROM products WHERE id=?').get(addProduct(v,u.id)));});
   ipcMain.handle('products:update',(_e,id:number,v:ProductInput)=>{
     const u=admin();const p=db.prepare('SELECT * FROM products WHERE id=?').get(id) as any;if(!p)throw new Error('المنتج غير موجود.');
-    if(!!p.serial_tracking!==!!v.serialTracking)throw new Error('لا يمكن تغيير طريقة تتبع الرقم التسلسلي بعد إنشاء المنتج.');
     const tx=db.transaction(()=>{
       db.prepare('UPDATE products SET name=?,brand=?,model=?,category=?,generic_category=?,barcode=?,purchase_price=?,selling_price=?,allow_discount=?,low_stock_threshold=?,updated_at=? WHERE id=?')
         .run(v.name.trim(),v.brand||'',v.model||'',v.category||'',v.genericCategory||'',v.barcode?.trim()||null,v.purchasePrice,v.sellingPrice,v.allowDiscount?1:0,v.lowStockThreshold||5,now(),id);
@@ -178,18 +195,9 @@ function register(){
     if(!p)throw new Error('المنتج غير موجود.');
     const delta=Number(v.delta);if(!Number.isInteger(delta)||delta===0)throw new Error('الكمية غير صحيحة.');
     if(p.stock_quantity+delta<0)throw new Error('لا يمكن أن يصبح المخزون سالبًا.');
-    const serials=(v.serials||[]).map((x:string)=>x.trim()).filter(Boolean);
-    if(p.serial_tracking&&delta<0)throw new Error('الخصم السالب للمنتج المتسلسل يتم من خلال بيع أو مرتجع القطعة.');
-    if(p.serial_tracking&&serials.length!==delta)throw new Error('أدخل Serial لكل قطعة مضافة.');
     const tx=db.transaction(()=>{
-      if(delta>0&&v.unitCost!==undefined&&Number(v.unitCost)>=0){
-        const avg=(p.purchase_price*p.stock_quantity+Number(v.unitCost)*delta)/(p.stock_quantity+delta);
-        db.prepare('UPDATE products SET purchase_price=? WHERE id=?').run(avg,p.id);
-      }
       db.prepare('UPDATE products SET stock_quantity=stock_quantity+?,updated_at=? WHERE id=?').run(delta,now(),p.id);
       db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)').run(p.id,delta>0?'restock':'adjustment',delta,v.reason||'تسوية مخزون',u.id,now());
-      const ins=db.prepare("INSERT INTO product_serials(product_id,serial_number,status,created_at) VALUES (?,?,'available',?)");
-      for(const serial of serials)ins.run(p.id,serial,now());
       audit(db,u.id,'stock.adjusted',{productId:p.id,delta});
     });tx();
   });
@@ -229,7 +237,7 @@ function register(){
     const id=crypto.randomUUID();
     const seqRow=db.prepare("SELECT value FROM settings WHERE key='invoiceSequence'").get() as any;
     const sequence=seqRow?Number(JSON.parse(seqRow.value)):1;
-    const invoice='SF-'+now().slice(0,10).replace(/-/g,'')+'-'+String(sequence).padStart(5,'0');
+    const invoice='KH-'+now().slice(0,10).replace(/-/g,'')+'-'+String(sequence).padStart(5,'0');
     const tx=db.transaction(()=>{
       let subtotal=0,discountTotal=0;
       const lines:any[]=[];
@@ -239,41 +247,24 @@ function register(){
         if(!Number.isInteger(item.quantity)||item.quantity<1||product.stock_quantity<item.quantity){
           throw new Error('الكمية غير متاحة للمنتج '+product.name);
         }
-        const serialNumbers=Array.isArray(item.serialNumbers)?item.serialNumbers.map((x:string)=>String(x).trim()).filter(Boolean):[];
-        if(product.serial_tracking){
-          if(serialNumbers.length!==item.quantity||new Set(serialNumbers).size!==serialNumbers.length){
-            throw new Error('حدد رقمًا تسلسليًا مختلفًا لكل قطعة من '+product.name);
-          }
-          const available=new Set((db.prepare("SELECT serial_number FROM product_serials WHERE product_id=? AND status='available'").all(product.id) as any[]).map(row=>row.serial_number));
-          for(const serial of serialNumbers)if(!available.has(serial))throw new Error('الرقم التسلسلي غير متاح: '+serial);
-        }else if(serialNumbers.length){
-          throw new Error('هذا المنتج لا يستخدم تتبع الأرقام التسلسلية.');
-        }
         const level:DiscountLevel=settings.discountEnabled?(item.discountLevel||null):null;
         const rate=level==='high'?settings.highDiscountPercent:level==='monster'?settings.monsterDiscountPercent:0;
         const margin=Math.max(0,product.selling_price-product.purchase_price)*item.quantity;
         const lineDiscount=product.allow_discount?margin*rate/100:0;
         subtotal+=product.selling_price*item.quantity;
         discountTotal+=lineDiscount;
-        lines.push({item,product,level,lineDiscount,serialNumbers});
+        lines.push({item,product,level,lineDiscount});
       }
       const total=Math.max(0,subtotal-discountTotal);
       db.prepare('INSERT INTO sales(id,invoice_number,cashier_user_id,subtotal,discount_total,total,currency,currency_symbol,payment_method,customer_name,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
         .run(id,invoice,u.id,subtotal,discountTotal,total,settings.currency,settings.currencySymbol,v.paymentMethod||'cash',v.customerName||'','completed',now());
       for(const line of lines){
-        const {item,product,level,lineDiscount,serialNumbers}=line;
+        const {item,product,level,lineDiscount}=line;
         db.prepare('INSERT INTO sale_items(sale_id,product_id,product_name,quantity,returned_quantity,unit_purchase_cost,unit_selling_price,discount_amount,discount_level,serial_numbers) VALUES (?,?,?,?,0,?,?,?,?,?)')
-          .run(id,product.id,product.name,item.quantity,product.purchase_price,product.selling_price,lineDiscount,level,JSON.stringify(serialNumbers));
+          .run(id,product.id,product.name,item.quantity,product.purchase_price,product.selling_price,lineDiscount,level,JSON.stringify([]));
         db.prepare('UPDATE products SET stock_quantity=stock_quantity-?,updated_at=? WHERE id=?').run(item.quantity,now(),product.id);
         db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)')
           .run(product.id,'sale',-item.quantity,'فاتورة '+invoice,u.id,now());
-        if(product.serial_tracking){
-          const change=db.prepare("UPDATE product_serials SET status='sold' WHERE product_id=? AND serial_number=? AND status='available'");
-          for(const serial of serialNumbers){
-            const result=change.run(product.id,serial);
-            if(result.changes!==1)throw new Error('تعذر حجز الرقم التسلسلي: '+serial);
-          }
-        }
       }
       db.prepare("INSERT INTO settings(key,value) VALUES ('invoiceSequence',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
         .run(JSON.stringify(sequence+1));
@@ -306,7 +297,6 @@ function register(){
         unitCost:session?.role==='admin'?item.unit_purchase_cost:undefined,
         discountAmount:item.discount_amount,
         discountLevel:item.discount_level,
-        serialNumbers:JSON.parse(item.serial_numbers||'[]')
       }))
     };
   });
@@ -318,16 +308,6 @@ function register(){
     const quantity=Number(input.quantity);
     const remaining=item.quantity-(item.returned_quantity||0);
     if(!Number.isInteger(quantity)||quantity<1||quantity>remaining)throw new Error('كمية المرتجع غير صحيحة.');
-    const originalSerials=JSON.parse(item.serial_numbers||'[]') as string[];
-    const returnSerials=Array.isArray(input.serialNumbers)?input.serialNumbers.map((x:string)=>String(x).trim()).filter(Boolean):[];
-    if(originalSerials.length){
-      if(returnSerials.length!==quantity||new Set(returnSerials).size!==returnSerials.length)throw new Error('حدد الرقم التسلسلي لكل قطعة مرتجعة.');
-      for(const serial of returnSerials){
-        if(!originalSerials.includes(serial))throw new Error('هذا الرقم ليس ضمن الفاتورة.');
-        const status=db.prepare("SELECT id FROM product_serials WHERE product_id=? AND serial_number=? AND status='sold'").get(item.product_id,serial);
-        if(!status)throw new Error('الرقم التسلسلي غير موجود بحالة بيع: '+serial);
-      }
-    }else if(returnSerials.length)throw new Error('العنصر لا يتطلب رقمًا تسلسليًا.');
     const refundPerUnit=Math.max(0,item.unit_selling_price-(item.discount_amount/Math.max(1,item.quantity)));
     const refund=Math.round(refundPerUnit*quantity*100)/100;
     const transaction=db.transaction(()=>{
@@ -337,16 +317,10 @@ function register(){
         .run(item.id,quantity,refund,String(input.reason||'مرتجع'),u.id,now());
       db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)')
         .run(item.product_id,'return',quantity,'مرتجع فاتورة',u.id,now());
-      if(returnSerials.length){
-        const update=db.prepare("UPDATE product_serials SET status='available' WHERE product_id=? AND serial_number=? AND status='sold'");
-        for(const serial of returnSerials){
-          if(update.run(item.product_id,serial).changes!==1)throw new Error('تعذر إعادة الرقم التسلسلي للمخزون: '+serial);
-        }
-      }
       const counts=db.prepare('SELECT COALESCE(SUM(quantity),0) total,COALESCE(SUM(returned_quantity),0) returned FROM sale_items WHERE sale_id=?').get(item.sale_id) as any;
       const status=counts.returned>=counts.total?'refunded':'partially_refunded';
       db.prepare('UPDATE sales SET status=? WHERE id=?').run(status,item.sale_id);
-      audit(db,u.id,'sale.item-returned',{saleId:item.sale_id,saleItemId:item.id,quantity,refund,returnSerials});
+      audit(db,u.id,'sale.item-returned',{saleId:item.sale_id,saleItemId:item.id,quantity,refund});
     });
     transaction();
     return {success:true,refund};
@@ -364,11 +338,6 @@ function register(){
           db.prepare('UPDATE products SET stock_quantity=stock_quantity+?,updated_at=? WHERE id=?').run(remaining,now(),item.product_id);
           db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)')
             .run(item.product_id,'void',remaining,'إلغاء فاتورة '+sale.invoice_number,u.id,now());
-        }
-        const serials=JSON.parse(item.serial_numbers||'[]') as string[];
-        if(serials.length){
-          const update=db.prepare("UPDATE product_serials SET status='available' WHERE product_id=? AND serial_number=? AND status='sold'");
-          for(const serial of serials)update.run(item.product_id,serial);
         }
       }
       db.prepare("UPDATE sales SET status='void' WHERE id=?").run(saleId);
@@ -392,11 +361,15 @@ function register(){
 app.whenReady().then(()=>{
   databasePath=path.join(app.getPath('userData'),'storeflow.sqlite');
   db=openDatabase(databasePath);
-  register();makeWindow();scheduleBackup();
-  const s=getSettings(db);if(s.backupPaths.some(Boolean)){
-    const span=Math.max(1,s.backupIntervalHours||24)*3600000;
-    if(!s.lastBackupAt||Date.now()-new Date(s.lastBackupAt).getTime()>=span)setTimeout(()=>backup().catch(console.error),7000);
+  const adminCount=Number((db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin'").get() as any).n);
+  if(!adminCount){
+    const langFile=path.join(app.getPath('userData'),'install-language.txt');
+    try{const installedLanguage=fs.readFileSync(langFile,'utf8').trim();if(installedLanguage==='ar'||installedLanguage==='en')saveSettings(db,{...getSettings(db),language:installedLanguage});}catch{}
   }
+  register();makeWindow();scheduleBackup();
+  const s=getSettings(db);
+  const span=Math.max(1,s.backupIntervalHours||24)*3600000;
+  if(!s.lastBackupAt||Date.now()-new Date(s.lastBackupAt).getTime()>=span)setTimeout(()=>backup().catch(console.error),7000);
   app.on('activate',()=>{if(BrowserWindow.getAllWindows().length===0)makeWindow();});
 });
 app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit();});

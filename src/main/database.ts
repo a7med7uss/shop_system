@@ -13,14 +13,14 @@ export const defaults: StoreSettings = {
   language: 'ar',
   currency: 'EGP',
   currencySymbol: 'ج.م',
-  theme: 'light',
+  theme: 'system',
+  fontScale: 1,
   paperSize: 'A4',
   discountEnabled: true,
   highDiscountPercent: 15,
   monsterDiscountPercent: 30,
   backupPaths: ['', '', ''],
   backupIntervalHours: 24,
-  backupRetention: 14,
   lastBackupAt: ''
 };
 
@@ -59,6 +59,17 @@ export function openDatabase(filePath: string) {
   for (const [key, value] of Object.entries(defaults)) {
     settingInsert.run(key, JSON.stringify(value));
   }
+  // Serial-number tracking was removed from the product workflow. Keep the legacy
+  // tables/columns so existing databases remain readable, but disable the feature.
+  const schemaVersion=Number(db.pragma('user_version',{simple:true})||0);
+  if(schemaVersion<1){
+    const savedTheme=db.prepare("SELECT value FROM settings WHERE key='theme'").get() as {value:string}|undefined;
+    if(savedTheme&&JSON.parse(savedTheme.value)==='light'){
+      db.prepare("UPDATE settings SET value=? WHERE key='theme'").run(JSON.stringify('system'));
+    }
+    db.pragma('user_version = 1');
+  }
+  db.exec('UPDATE products SET serial_tracking=0 WHERE serial_tracking<>0');
   return db;
 }
 
