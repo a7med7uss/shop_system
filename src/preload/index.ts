@@ -25,6 +25,7 @@ const api:StoreFlowAPI = {
   scanProduct:(v)=>ipcRenderer.invoke('products:scan',v),
   createProduct:(v)=>ipcRenderer.invoke('products:create',v),
   updateProduct:(id,v)=>ipcRenderer.invoke('products:update',id,v),
+  deleteProduct:(id)=>ipcRenderer.invoke('products:delete',id),
   adjustStock:(v)=>ipcRenderer.invoke('stock:adjust',v),
   dashboard:(from,to)=>ipcRenderer.invoke('dashboard:get',from,to),
   quoteSale:(v)=>ipcRenderer.invoke('sales:quote',v),
