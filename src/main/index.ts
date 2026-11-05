@@ -211,9 +211,20 @@ function register(){
   ipcMain.handle('auth:remember:set',async(_e,value)=>writeRememberedLogin(value));
   ipcMain.handle('window:toggle-fullscreen',()=>{if(!win||win.isDestroyed())return false;const next=!win.isFullScreen();win.setFullScreen(next);return next;});
   ipcMain.handle('settings:setup',(_e,v:Partial<StoreSettings>)=>{
-    if(Number((db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin'").get() as any).n))throw new Error('تم إعداد حساب الأدمن بالفعل.');
-    const storeName=String(v.storeName||'').trim();if(!storeName)throw new Error('اسم المتجر مطلوب لإكمال الإعداد.');
-    const current=getSettings(db);const currencies:Record<string,string>={EGP:'ج.م',USD:'
+    const count=Number((db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin'").get() as any).n);
+    if(count>0)throw new Error("تم إعداد حساب الأدمن بالفعل.");
+    const storeName=String(v.storeName||"").trim();
+    if(!storeName)throw new Error("اسم المتجر مطلوب لإكمال الإعداد.");
+    const current=getSettings(db);
+    const currencySymbols:Record<string,string>={EGP:"ج.م",USD:"$",EUR:"€",SAR:"ر.س",AED:"د.إ",GBP:"£",KWD:"د.ك"};
+    const language=v.language==="en"?"en":"ar";
+    const theme=(v.theme==="light"||v.theme==="dark"||v.theme==="system")?v.theme:"system";
+    const currency=currencySymbols[String(v.currency)]?String(v.currency):"EGP";
+    const fontScale=Math.max(0.9,Math.min(1.2,Number(v.fontScale)||1));
+    const saved:StoreSettings={...current,storeName,storeDescription:String(v.storeDescription||"").trim(),storeAddress:String(v.storeAddress||"").trim(),storePhone:String(v.storePhone||"").trim(),language,theme,currency,currencySymbol:currencySymbols[currency],fontScale};
+    saveSettings(db,saved);
+    return saved;
+  });
   ipcMain.handle('settings:theme',(_e,theme)=>{const u=login();if(!['system','light','dark'].includes(theme))throw new Error('الثيم غير صالح.');db.prepare('INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('theme',JSON.stringify(theme));audit(db,u.id,'settings.theme-changed',{theme});return theme;});
   ipcMain.handle('settings:save',(_e,v:StoreSettings)=>{
     const u=admin();if(!Array.isArray(v.backupPaths)||v.backupPaths.length>3)throw new Error('ثلاثة مسارات نسخ احتياطي كحد أقصى.');
