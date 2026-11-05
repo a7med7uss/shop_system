@@ -132,8 +132,8 @@ function SummaryRow({label,value}:any){return <div className="summary-row"><span
 
 function cleanErrorMessage(value:unknown){
  let message=String(value??'').trim();
- message=message.replace(/^Error invoking remote method '[^']+':\\s*/i,'').replace(/^Error:\\s*/i,'');
- message=message.split('\\n')[0].trim();
+ message=message.replace(/^Error invoking remote method '[^']+':\s*/i,'').replace(/^Error:\s*/i,'');
+ message=message.split('\n')[0].trim();
  return message||'حدث خطأ غير متوقع.';
 }
 function escapeHtml(value:unknown){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]!));}
