@@ -478,9 +478,9 @@ function register(){
         const remaining=item.quantity-(item.returned_quantity||0);
         if(remaining>0){
           db.prepare('UPDATE products SET stock_quantity=stock_quantity+?,updated_at=? WHERE id=?').run(remaining,now(),item.product_id);
-          db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)')
-            .run(item.product_id,'void',remaining,'تراجع عن بيع '+sale.invoice_number,u.id,now());
         }
+        db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)')
+          .run(item.product_id,'void',remaining,'تراجع عن بيع '+sale.invoice_number,u.id,now());
       }
       db.prepare("UPDATE sales SET status='void' WHERE id=?").run(saleId);
       audit(db,u.id,'sale.voided',{saleId,invoiceNumber:sale.invoice_number,reason,restoredItems:items.map(item=>({productId:item.product_id,quantity:item.quantity-(item.returned_quantity||0)}))});
