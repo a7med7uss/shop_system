@@ -44,13 +44,20 @@ async function migrateLegacyDatabase(targetPath:string) {
   } finally {
     legacy.close();
   }
-  const migrated=new Database(targetPath,{readonly:true,fileMustExist:true});
   try {
-    const integrity=migrated.pragma('integrity_check',{simple:true});
-    const hasUsers=!!migrated.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").get();
-    if(integrity!=='ok'||!hasUsers) throw new Error('تعذر التحقق من نسخة قاعدة البيانات بعد ترحيلها. قاعدة البيانات الأصلية ما زالت محفوظة.');
-  } finally {
-    migrated.close();
+    const migrated=new Database(targetPath,{readonly:true,fileMustExist:true});
+    try {
+      const integrity=migrated.pragma('integrity_check',{simple:true});
+      const hasUsers=!!migrated.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").get();
+      if(integrity!=='ok'||!hasUsers) throw new Error('تعذر التحقق من نسخة قاعدة البيانات بعد ترحيلها. قاعدة البيانات الأصلية ما زالت محفوظة.');
+    } finally {
+      migrated.close();
+    }
+  } catch(error) {
+    for(const suffix of ['', '-wal', '-shm']) {
+      try { fs.unlinkSync(targetPath+suffix); } catch {}
+    }
+    throw error;
   }
   const legacyLanguage=path.join(path.dirname(source),'install-language.txt');
   const targetLanguage=path.join(path.dirname(targetPath),'install-language.txt');
@@ -417,6 +424,10 @@ app.whenReady().then(async()=>{
   const span=Math.max(1,s.backupIntervalHours||24)*3600000;
   if(!s.lastBackupAt||Date.now()-new Date(s.lastBackupAt).getTime()>=span)setTimeout(()=>backup().catch(console.error),7000);
   app.on('activate',()=>{if(BrowserWindow.getAllWindows().length===0)makeWindow();});
+}).catch(error=>{
+  console.error('Kasho startup failed:',error);
+  dialog.showErrorBox('تعذر تشغيل Kasho',error?.message||String(error));
+  app.quit();
 });
 app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit();});
 app.on('before-quit',()=>{if(backupTimer)clearInterval(backupTimer);if(db?.open)db.close();});
