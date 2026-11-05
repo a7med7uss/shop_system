@@ -119,7 +119,7 @@ function addProduct(input:ProductInput,userId:number){
   const stamp=now();
   const tx=db.transaction(()=>{
     const result=db.prepare('INSERT INTO products(name,brand,model,category,generic_category,barcode,purchase_price,selling_price,stock_quantity,allow_discount,serial_tracking,low_stock_threshold,visual_type,icon_key,visual_color,image_data,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-      .run(input.name.trim(),input.brand||'',input.model||'',input.category||'',input.genericCategory||'',input.barcode?.trim()||null,input.purchasePrice,input.sellingPrice,qty,input.allowDiscount?1:0,0,input.lowStockThreshold||5,input.visualType||'default',input.iconKey||'',input.visualColor||'',input.imageData||'',stamp,stamp);
+      .run(input.name.trim(),input.brand||'',input.model||'',input.category||'',input.genericCategory||'',input.barcode?.trim()||null,input.purchasePrice,input.sellingPrice,qty,input.allowDiscount?1:0,0,Number(input.lowStockThreshold),input.visualType||'default',input.iconKey||'',input.visualColor||'',input.imageData||'',stamp,stamp);
     const id=Number(result.lastInsertRowid);tagsFor(id,input.tags||[]);
     if(qty)db.prepare('INSERT INTO inventory_movements(product_id,type,quantity_delta,reason,user_id,created_at) VALUES (?,?,?,?,?,?)').run(id,'restock',qty,'إضافة مخزون عند إنشاء المنتج',userId,stamp);
     audit(db,userId,'product.created',{id,name:input.name});
@@ -288,7 +288,7 @@ function register(){
     const p=existing;
     const tx=db.transaction(()=>{
       db.prepare('UPDATE products SET name=?,brand=?,model=?,category=?,generic_category=?,barcode=?,purchase_price=?,selling_price=?,allow_discount=?,low_stock_threshold=?,visual_type=?,icon_key=?,visual_color=?,image_data=?,updated_at=? WHERE id=?')
-        .run(v.name.trim(),v.brand||'',v.model||'',v.category||'',v.genericCategory||'',v.barcode?.trim()||null,v.purchasePrice,v.sellingPrice,v.allowDiscount?1:0,v.lowStockThreshold||5,v.visualType||'default',v.iconKey||'',v.visualColor||'',v.imageData||'',now(),id);
+        .run(v.name.trim(),v.brand||'',v.model||'',v.category||'',v.genericCategory||'',v.barcode?.trim()||null,v.purchasePrice,v.sellingPrice,v.allowDiscount?1:0,Number(v.lowStockThreshold),v.visualType||'default',v.iconKey||'',v.visualColor||'',v.imageData||'',now(),id);
       tagsFor(id,v.tags||[]);audit(db,u.id,'product.updated',{id});
     });tx();return productDto(db.prepare('SELECT * FROM products WHERE id=?').get(id));
   });
