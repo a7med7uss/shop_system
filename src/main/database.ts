@@ -21,7 +21,9 @@ export const defaults: StoreSettings = {
   monsterDiscountPercent: 30,
   backupPaths: ['', '', ''],
   backupIntervalHours: 24,
-  lastBackupAt: ''
+  lastBackupAt: '',
+  scannerCameraId: '',
+  scannerCameraLabel: ''
 };
 
 export function openDatabase(filePath: string) {
