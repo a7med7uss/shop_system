@@ -431,3 +431,35 @@ body{zoom:var(--kasho-font-scale,1)}
  .rail>.logout{flex-basis:44px;min-height:44px;width:42px}
  .auth-exit{top:12px;right:12px;width:38px;height:38px}
 }
+
+
+/* Responsive overflow and font scaling: keep the whole page scrollable at every scale. */
+body{zoom:1!important}
+#root{zoom:var(--kasho-font-scale,1)!important;min-height:100dvh}
+.app{height:auto!important;min-height:100dvh!important;overflow:visible!important;align-items:stretch}
+.rail{position:sticky!important;top:0!important;align-self:flex-start;height:100dvh!important;min-height:100dvh!important;overflow:visible!important;flex:0 0 72px}
+.workspace{height:auto!important;min-height:100dvh!important;overflow:visible!important;display:flex;flex-direction:column}
+.workspace>.page{overflow:visible!important;min-height:calc(100dvh - 66px);height:auto!important}
+.settings{width:100%;max-width:none;min-width:0;grid-template-columns:repeat(2,minmax(0,1fr))}
+.settings>.about-panel{grid-column:1/-1;width:100%;max-width:none;min-width:0}
+.product-detail-view{display:grid;grid-template-columns:minmax(90px,120px) minmax(0,1fr);align-items:start;gap:16px}
+.product-detail-view>.product-visual{width:100px;height:100px;margin:0}
+.product-detail-view>div{min-width:0}
+.product-detail-view p{padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;overflow-wrap:anywhere}
+.product-detail-view .tags{margin-top:10px}
+.product-detail-view .modal-actions{grid-column:1/-1}
+.product-detail-image{grid-column:1/-1;width:min(100%,420px);max-height:320px;justify-self:center}
+.editable-tags{margin-top:7px}
+.editable-tags button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--soft);color:var(--text);border-radius:8px;padding:5px 8px;font:inherit;font-size:11px}
+.editable-tags button svg{color:var(--red)}
+.duplicate-notice{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.duplicate-notice button{border:1px solid var(--orange);background:var(--surface);color:var(--orange);border-radius:8px;padding:6px 10px;font-weight:700}
+.invoice-date{text-align:start!important;direction:inherit}
+@media(max-width:700px){
+ .rail{flex-basis:58px!important;width:58px!important}
+ .settings{grid-template-columns:minmax(0,1fr)!important}
+ .settings>.about-panel{grid-column:1}
+ .product-detail-view{grid-template-columns:1fr}
+ .product-detail-view>.product-visual{width:80px;height:80px}
+ .product-detail-view .modal-actions{grid-column:1}
+}
