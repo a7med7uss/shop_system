@@ -98,7 +98,7 @@ function validateProductInput(input:ProductInput,stockQuantity:number,excludeId?
   if(!Number.isFinite(purchase)||purchase<=0)throw new Error('سعر الشراء/الجملة يجب أن يكون أكبر من صفر.');
   if(!Number.isFinite(selling)||selling<=0)throw new Error('سعر البيع يجب أن يكون أكبر من صفر.');
   if(!Number.isInteger(stockQuantity)||stockQuantity<=0)throw new Error('كمية المنتج يجب أن تكون أكبر من صفر.');
-  if(!Number.isInteger(threshold)||threshold<0||threshold>=stockQuantity)throw new Error('حد التنبيه يجب أن يكون صفرًا أو أقل من الكمية المتاحة.');
+  if(!Number.isInteger(threshold)||threshold<0||(threshold!==0&&threshold>=stockQuantity))throw new Error('حد التنبيه يجب أن يكون صفرًا أو أقل من الكمية المتاحة.');
   const duplicate=db.prepare(`SELECT id,name,brand,model,barcode FROM products
     WHERE active=1 AND id<>COALESCE(?, -1) AND (
       (?<>'' AND lower(trim(COALESCE(barcode,'')))=lower(?)) OR
