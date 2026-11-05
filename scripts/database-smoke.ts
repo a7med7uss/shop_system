@@ -59,9 +59,9 @@ async function run() {
     ).run(productId, 'opening', 7, 'Smoke test', userId, createdAt);
 
     const saleId='smoke-sale-'+stamp;
-    const saleItemId=Number(db.prepare(
+    db.prepare(
       'INSERT INTO sales(id,invoice_number,cashier_user_id,subtotal,discount_total,total,currency,currency_symbol,payment_method,customer_name,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
-    ).run(saleId,'SMOKE-'+stamp,userId,90,0,90,'EGP','ج.م','cash','','completed',createdAt).lastInsertRowid);
+    ).run(saleId,'SMOKE-'+stamp,userId,90,0,90,'EGP','ج.م','cash','','completed',createdAt);
     const itemId=Number(db.prepare(
       'INSERT INTO sale_items(sale_id,product_id,product_name,quantity,returned_quantity,unit_purchase_cost,unit_selling_price,discount_amount,discount_level,serial_numbers) VALUES (?,?,?,?,?,?,?,?,?,?)'
     ).run(saleId,productId,'Kasho smoke product',3,0,5,30,0,null,'[]').lastInsertRowid);
