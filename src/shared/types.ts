@@ -134,7 +134,7 @@ export interface Dashboard {
 }
 
 export interface StoreFlowAPI {
-  bootstrap: () => Promise<{hasAdmin:boolean;version:string}>;
+  bootstrap: () => Promise<{hasAdmin:boolean;version:string;settings:StoreSettings}>;
   setupAdmin: (input:{username:string;displayName:string;password:string}) => Promise<User>;
   login: (input:{username:string;password:string}) => Promise<User>;
   logout: () => Promise<void>;
@@ -148,6 +148,7 @@ export interface StoreFlowAPI {
   getSettings: () => Promise<StoreSettings>;
   setTheme: (theme:Theme) => Promise<Theme>;
   saveSettings: (settings:StoreSettings) => Promise<StoreSettings>;
+  saveInitialSettings: (settings:Partial<StoreSettings>) => Promise<StoreSettings>;
   chooseDirectory: () => Promise<string|null>;
   chooseImage: () => Promise<string|null>;
   chooseProductImage: () => Promise<string|null>;
@@ -170,6 +171,8 @@ export interface StoreFlowAPI {
   createExpense: (input:{title:string;amount:number}) => Promise<void>;
   listUsers: () => Promise<Array<User & {active:boolean}>>;
   createUser: (input:{username:string;displayName:string;password:string;role:Role}) => Promise<void>;
+  updateUser: (id:number,input:{username:string;displayName:string;password?:string}) => Promise<User>;
+  deleteUser: (id:number) => Promise<void>;
   setUserActive: (id:number,active:boolean) => Promise<void>;
   printInvoice: (html:string,paperSize:PaperSize) => Promise<{success:boolean;message:string}>;
 }
